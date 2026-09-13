@@ -1,5 +1,5 @@
 use sqlx::PgPool;
-use tonic::transport::Channel;
+use wms_core::grpc::TracedChannel;
 use tonic::{Request, Response, Status};
 use wms_core::AppError;
 use wms_proto::inventory::v1::inventory_service_server::InventoryService;
@@ -22,15 +22,15 @@ const RECEIVER_ROLES: [&str; 3] = ["admin", "warehouse_manager", "staff"];
 // and multiplex over a single HTTP/2 connection.
 pub struct InventoryGrpcService {
     pool: PgPool,
-    warehouses: WarehouseServiceClient<Channel>,
-    products: ProductServiceClient<Channel>,
+    warehouses: WarehouseServiceClient<TracedChannel>,
+    products: ProductServiceClient<TracedChannel>,
 }
 
 impl InventoryGrpcService {
     pub fn new(
         pool: PgPool,
-        warehouses: WarehouseServiceClient<Channel>,
-        products: ProductServiceClient<Channel>,
+        warehouses: WarehouseServiceClient<TracedChannel>,
+        products: ProductServiceClient<TracedChannel>,
     ) -> Self {
         Self {
             pool,
@@ -59,28 +59,33 @@ impl InventoryGrpcService {
         }
     }
 
-    // NAIVE ON PURPOSE: one round trip per line item. A ten-line receipt makes ten
-    // sequential network calls. Phase 6 puts this under a tracing waterfall so the
-    // N+1 is visible, then replaces it with the batch RPC that already exists.
+    // Was one round trip per line item. Jaeger showed the ladder of sequential
+    // get_product spans, so it is now a single batch call: N network hops become 1.
     async fn assert_products_exist(&self, product_ids: &[i64]) -> Result<(), AppError> {
         let mut client = self.products.clone();
 
-        for product_id in product_ids {
-            let product = client
-                .get_product(Request::new(product_v1::GetProductRequest { id: *product_id }))
-                .await
-                .map_err(|status| match AppError::from(status) {
-                    AppError::NotFound(_) => {
-                        AppError::Validation(format!("product {product_id} not found"))
-                    }
-                    other => other,
-                })?
-                .into_inner();
+        let found = client
+            .get_products_by_ids(Request::new(product_v1::GetProductsByIdsRequest {
+                ids: product_ids.to_vec(),
+            }))
+            .await
+            .map_err(AppError::from)?
+            .into_inner()
+            .products;
 
-            if !product.is_active {
-                return Err(AppError::Validation(format!(
-                    "product {product_id} is not active"
-                )));
+        for product_id in product_ids {
+            match found.iter().find(|product| product.id == *product_id) {
+                None => {
+                    return Err(AppError::Validation(format!(
+                        "product {product_id} not found"
+                    )));
+                }
+                Some(product) if !product.is_active => {
+                    return Err(AppError::Validation(format!(
+                        "product {product_id} is not active"
+                    )));
+                }
+                Some(_) => {}
             }
         }
 
@@ -114,6 +119,7 @@ fn to_proto_movement(movement: models::stock::StockMovement) -> StockMovement {
 
 #[tonic::async_trait]
 impl InventoryService for InventoryGrpcService {
+    #[tracing::instrument(skip_all)]
     async fn receive_stock(
         &self,
         request: Request<ReceiveStockRequest>,
@@ -204,6 +210,7 @@ impl InventoryService for InventoryGrpcService {
         }))
     }
 
+    #[tracing::instrument(skip_all)]
     async fn get_stock_balance(
         &self,
         request: Request<GetStockBalanceRequest>,
@@ -217,6 +224,7 @@ impl InventoryService for InventoryGrpcService {
         Ok(Response::new(to_proto_balance(balance)))
     }
 
+    #[tracing::instrument(skip_all)]
     async fn list_stock_balances(
         &self,
         request: Request<ListStockBalancesRequest>,
@@ -230,6 +238,7 @@ impl InventoryService for InventoryGrpcService {
         }))
     }
 
+    #[tracing::instrument(skip_all)]
     async fn list_stock_movements(
         &self,
         request: Request<ListStockMovementsRequest>,

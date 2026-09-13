@@ -16,7 +16,7 @@ use service::UserGrpcService;
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     wms_core::config::load_dotenv(env!("CARGO_MANIFEST_DIR"));
-    wms_core::telemetry::init("user-service");
+    let _telemetry = wms_core::telemetry::init("user-service");
 
     let config = ServiceConfig::from_env();
     let pool = wms_core::db::connect(&DbConfig::from_env()).await?;
@@ -30,6 +30,7 @@ async fn main() -> anyhow::Result<()> {
 
     tracing::info!("user-service listening on {addr}");
     Server::builder()
+        .layer(wms_core::grpc::trace_layer())
         .add_service(UserServiceServer::new(grpc))
         .serve(addr)
         .await?;

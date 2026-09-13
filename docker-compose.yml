@@ -1,4 +1,15 @@
 services:
+  # No healthcheck and nothing depends_on this: a tracing backend must never gate
+  # application startup. If Jaeger is down, OTLP export fails quietly and retries
+  # while the services keep serving traffic.
+  jaeger:
+    image: jaegertracing/jaeger:2.20.0
+    container_name: jaeger
+    restart: unless-stopped
+    ports:
+      - "16686:16686"
+      - "4317:4317"
+
   postgres-user:
     image: postgres:17-alpine
     container_name: postgres-user
@@ -78,6 +89,7 @@ services:
         SERVICE: user-service
     environment:
       GRPC_ADDR: 0.0.0.0:50051
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4317
       DATABASE_URL: postgresql://postgres:lokal@postgres-user:5432/warehouse_user_db
       DB_MAX_CONNECTIONS: 10
       JWT_SECRET: secret
@@ -101,6 +113,7 @@ services:
         SERVICE: warehouse-service
     environment:
       GRPC_ADDR: 0.0.0.0:50052
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4317
       DATABASE_URL: postgresql://postgres:lokal@postgres-warehouse:5432/warehouse_warehouse_db
       DB_MAX_CONNECTIONS: 10
     ports:
@@ -121,6 +134,7 @@ services:
         SERVICE: product-service
     environment:
       GRPC_ADDR: 0.0.0.0:50053
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4317
       DATABASE_URL: postgresql://postgres:lokal@postgres-product:5432/warehouse_product_db
       DB_MAX_CONNECTIONS: 10
     ports:
@@ -141,6 +155,7 @@ services:
         SERVICE: inventory-service
     environment:
       GRPC_ADDR: 0.0.0.0:50054
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4317
       DATABASE_URL: postgresql://postgres:lokal@postgres-inventory:5432/warehouse_inventory_db
       DB_MAX_CONNECTIONS: 10
       WAREHOUSE_SERVICE_URL: http://warehouse-service:50052
@@ -167,6 +182,7 @@ services:
         SERVICE: api-gateway
     environment:
       SERVER_URL: 0.0.0.0
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4317
       SERVER_PORT: 8080
       USER_SERVICE_URL: http://user-service:50051
       WAREHOUSE_SERVICE_URL: http://warehouse-service:50052

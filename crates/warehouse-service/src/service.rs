@@ -35,6 +35,7 @@ fn to_proto(warehouse: models::warehouse::Warehouse) -> Warehouse {
 
 #[tonic::async_trait]
 impl WarehouseService for WarehouseGrpcService {
+    #[tracing::instrument(skip_all)]
     async fn get_warehouse(
         &self,
         request: Request<GetWarehouseRequest>,
@@ -46,6 +47,7 @@ impl WarehouseService for WarehouseGrpcService {
         Ok(Response::new(to_proto(warehouse)))
     }
 
+    #[tracing::instrument(skip_all)]
     async fn list_warehouses(
         &self,
         _request: Request<ListWarehousesRequest>,
@@ -57,6 +59,7 @@ impl WarehouseService for WarehouseGrpcService {
         }))
     }
 
+    #[tracing::instrument(skip_all)]
     async fn create_warehouse(
         &self,
         request: Request<CreateWarehouseRequest>,
@@ -81,6 +84,7 @@ impl WarehouseService for WarehouseGrpcService {
         Ok(Response::new(to_proto(warehouse)))
     }
 
+    #[tracing::instrument(skip_all)]
     async fn update_warehouse(
         &self,
         request: Request<UpdateWarehouseRequest>,
@@ -101,6 +105,7 @@ impl WarehouseService for WarehouseGrpcService {
         Ok(Response::new(to_proto(warehouse)))
     }
 
+    #[tracing::instrument(skip_all)]
     async fn warehouse_exists(
         &self,
         request: Request<WarehouseExistsRequest>,
@@ -113,6 +118,7 @@ impl WarehouseService for WarehouseGrpcService {
         }))
     }
 
+    #[tracing::instrument(skip_all)]
     async fn delete_warehouse(
         &self,
         request: Request<DeleteWarehouseRequest>,

@@ -53,6 +53,7 @@ fn to_proto_role(role: models::role::Role) -> Role {
 
 #[tonic::async_trait]
 impl UserService for UserGrpcService {
+    #[tracing::instrument(skip_all)]
     async fn register(&self, request: Request<RegisterRequest>) -> Result<Response<User>, Status> {
         let req = request.into_inner();
 
@@ -78,6 +79,7 @@ impl UserService for UserGrpcService {
         Ok(Response::new(to_proto_user(user)))
     }
 
+    #[tracing::instrument(skip_all)]
     async fn login(
         &self,
         request: Request<LoginRequest>,
@@ -101,6 +103,7 @@ impl UserService for UserGrpcService {
         }))
     }
 
+    #[tracing::instrument(skip_all)]
     async fn get_user(&self, request: Request<GetUserRequest>) -> Result<Response<User>, Status> {
         let user = user_repository::find_by_id(&self.pool, request.into_inner().id)
             .await?
@@ -109,6 +112,7 @@ impl UserService for UserGrpcService {
         Ok(Response::new(to_proto_user(user)))
     }
 
+    #[tracing::instrument(skip_all)]
     async fn list_users(
         &self,
         _request: Request<ListUsersRequest>,
@@ -120,6 +124,7 @@ impl UserService for UserGrpcService {
         }))
     }
 
+    #[tracing::instrument(skip_all)]
     async fn update_user(
         &self,
         request: Request<UpdateUserRequest>,
@@ -139,6 +144,7 @@ impl UserService for UserGrpcService {
         Ok(Response::new(to_proto_user(user)))
     }
 
+    #[tracing::instrument(skip_all)]
     async fn delete_user(
         &self,
         request: Request<DeleteUserRequest>,
@@ -151,6 +157,7 @@ impl UserService for UserGrpcService {
         Ok(Response::new(()))
     }
 
+    #[tracing::instrument(skip_all)]
     async fn list_user_roles(
         &self,
         request: Request<ListUserRolesRequest>,
@@ -164,6 +171,7 @@ impl UserService for UserGrpcService {
         }))
     }
 
+    #[tracing::instrument(skip_all)]
     async fn assign_role(
         &self,
         request: Request<AssignRoleRequest>,
@@ -174,6 +182,7 @@ impl UserService for UserGrpcService {
         Ok(Response::new(()))
     }
 
+    #[tracing::instrument(skip_all)]
     async fn remove_role(
         &self,
         request: Request<RemoveRoleRequest>,
@@ -188,6 +197,7 @@ impl UserService for UserGrpcService {
         Ok(Response::new(()))
     }
 
+    #[tracing::instrument(skip_all)]
     async fn list_roles(
         &self,
         _request: Request<ListRolesRequest>,
@@ -199,6 +209,7 @@ impl UserService for UserGrpcService {
         }))
     }
 
+    #[tracing::instrument(skip_all)]
     async fn get_role(&self, request: Request<GetRoleRequest>) -> Result<Response<Role>, Status> {
         let role = role_repository::find_by_id(&self.pool, request.into_inner().id)
             .await?
@@ -207,6 +218,7 @@ impl UserService for UserGrpcService {
         Ok(Response::new(to_proto_role(role)))
     }
 
+    #[tracing::instrument(skip_all)]
     async fn create_role(
         &self,
         request: Request<CreateRoleRequest>,
@@ -222,6 +234,7 @@ impl UserService for UserGrpcService {
         Ok(Response::new(to_proto_role(role)))
     }
 
+    #[tracing::instrument(skip_all)]
     async fn update_role(
         &self,
         request: Request<UpdateRoleRequest>,
@@ -235,6 +248,7 @@ impl UserService for UserGrpcService {
         Ok(Response::new(to_proto_role(role)))
     }
 
+    #[tracing::instrument(skip_all)]
     async fn delete_role(
         &self,
         request: Request<DeleteRoleRequest>,

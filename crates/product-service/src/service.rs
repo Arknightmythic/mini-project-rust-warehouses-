@@ -48,6 +48,7 @@ fn to_proto_category(category: models::category::Category) -> Category {
 
 #[tonic::async_trait]
 impl ProductService for ProductGrpcService {
+    #[tracing::instrument(skip_all)]
     async fn get_product(
         &self,
         request: Request<GetProductRequest>,
@@ -59,6 +60,7 @@ impl ProductService for ProductGrpcService {
         Ok(Response::new(to_proto_product(product)))
     }
 
+    #[tracing::instrument(skip_all)]
     async fn get_products_by_ids(
         &self,
         request: Request<GetProductsByIdsRequest>,
@@ -71,6 +73,7 @@ impl ProductService for ProductGrpcService {
         }))
     }
 
+    #[tracing::instrument(skip_all)]
     async fn list_products(
         &self,
         request: Request<ListProductsRequest>,
@@ -83,6 +86,7 @@ impl ProductService for ProductGrpcService {
         }))
     }
 
+    #[tracing::instrument(skip_all)]
     async fn create_product(
         &self,
         request: Request<CreateProductRequest>,
@@ -109,6 +113,7 @@ impl ProductService for ProductGrpcService {
         Ok(Response::new(to_proto_product(product)))
     }
 
+    #[tracing::instrument(skip_all)]
     async fn update_product(
         &self,
         request: Request<UpdateProductRequest>,
@@ -130,6 +135,7 @@ impl ProductService for ProductGrpcService {
         Ok(Response::new(to_proto_product(product)))
     }
 
+    #[tracing::instrument(skip_all)]
     async fn deactivate_product(
         &self,
         request: Request<DeactivateProductRequest>,
@@ -143,6 +149,7 @@ impl ProductService for ProductGrpcService {
         Ok(Response::new(()))
     }
 
+    #[tracing::instrument(skip_all)]
     async fn list_categories(
         &self,
         _request: Request<ListCategoriesRequest>,
@@ -154,6 +161,7 @@ impl ProductService for ProductGrpcService {
         }))
     }
 
+    #[tracing::instrument(skip_all)]
     async fn create_category(
         &self,
         request: Request<CreateCategoryRequest>,
