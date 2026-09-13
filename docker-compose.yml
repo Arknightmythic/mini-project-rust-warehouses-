@@ -1,0 +1,47 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_DB: warehouse-rust
+      POSTGRES_HOST_AUTH_METHOD: trust
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  app:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      SERVER_URL: 0.0.0.0
+      SERVER_PORT: 8080
+      DATABASE_URL: postgresql://postgres@postgres:5432/warehouse-rust
+      DB_MAX_CONNECTIONS: 10
+      DB_CONNECTION_TIMEOUT_SECS: 10
+      DB_IDLE_TIMEOUT_SECS: 300
+      Jwt_SECRET: secret
+      JWT_EXPIRATION_MINUTES: 60
+      JWT_ISSUER: secret
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  seed:
+    build: .
+    entrypoint: ["/app/seed"]
+    environment:
+      DATABASE_URL: postgresql://postgres@postgres:5432/warehouse-rust
+    depends_on:
+      postgres:
+        condition: service_healthy
+    profiles: ["tools"]
+
+volumes:
+  postgres_data:
