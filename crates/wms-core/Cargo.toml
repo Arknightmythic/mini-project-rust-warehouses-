@@ -9,6 +9,8 @@ default = []
 axum = ["dep:axum"]
 # Gated so crates that never speak gRPC do not compile tonic.
 grpc = ["dep:tonic", "dep:tower-http", "dep:http"]
+# Gated so crates that do not cache never compile a Redis client.
+cache = ["dep:redis"]
 
 [dependencies]
 anyhow = { workspace = true }
@@ -19,8 +21,10 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 sqlx = { workspace = true }
 thiserror = { workspace = true }
+tokio = { workspace = true }
 tonic = { workspace = true, optional = true }
 tower-http = { workspace = true, optional = true }
+redis = { workspace = true, optional = true }
 http = { workspace = true, optional = true }
 opentelemetry = { workspace = true }
 opentelemetry_sdk = { workspace = true }

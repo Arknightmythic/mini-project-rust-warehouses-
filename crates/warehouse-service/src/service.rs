@@ -1,4 +1,5 @@
 use sqlx::PgPool;
+use wms_core::cache::Cache;
 use tonic::{Request, Response, Status};
 use wms_core::AppError;
 use wms_proto::warehouse::v1::warehouse_service_server::WarehouseService;
@@ -13,11 +14,41 @@ use crate::repositories::warehouse_repository;
 
 pub struct WarehouseGrpcService {
     pool: PgPool,
+    cache: Option<Cache>,
 }
 
 impl WarehouseGrpcService {
-    pub fn new(pool: PgPool) -> Self {
-        Self { pool }
+    pub fn new(pool: PgPool, cache: Option<Cache>) -> Self {
+        Self { pool, cache }
+    }
+
+    fn cache_key(id: i64) -> String {
+        format!("warehouse:name:{id}")
+    }
+
+    // Only positive results are cached. Caching "does not exist" would mean a
+    // freshly created warehouse looks missing until the TTL expires, which is a
+    // worse trade than the occasional wasted lookup for a bad id.
+    async fn load_name(&self, id: i64) -> Result<Option<String>, AppError> {
+        if let Some(cache) = &self.cache {
+            if let Some(name) = cache.get::<String>(&Self::cache_key(id)).await {
+                return Ok(Some(name));
+            }
+        }
+
+        let found = warehouse_repository::exists(&self.pool, id).await?;
+
+        if let (Some(cache), Some(name)) = (&self.cache, &found) {
+            cache.put(&Self::cache_key(id), name).await;
+        }
+
+        Ok(found)
+    }
+
+    async fn invalidate(&self, id: i64) {
+        if let Some(cache) = &self.cache {
+            cache.invalidate(&Self::cache_key(id)).await;
+        }
     }
 }
 
@@ -102,6 +133,8 @@ impl WarehouseService for WarehouseGrpcService {
         .await?
         .ok_or_else(|| AppError::NotFound("warehouse not found".to_string()))?;
 
+        self.invalidate(warehouse.id).await;
+
         Ok(Response::new(to_proto(warehouse)))
     }
 
@@ -110,7 +143,7 @@ impl WarehouseService for WarehouseGrpcService {
         &self,
         request: Request<WarehouseExistsRequest>,
     ) -> Result<Response<WarehouseExistsResponse>, Status> {
-        let found = warehouse_repository::exists(&self.pool, request.into_inner().id).await?;
+        let found = self.load_name(request.into_inner().id).await?;
 
         Ok(Response::new(WarehouseExistsResponse {
             exists: found.is_some(),
@@ -123,12 +156,16 @@ impl WarehouseService for WarehouseGrpcService {
         &self,
         request: Request<DeleteWarehouseRequest>,
     ) -> Result<Response<()>, Status> {
-        let affected =
-            warehouse_repository::soft_delete(&self.pool, request.into_inner().id).await?;
+        let id = request.into_inner().id;
+        let affected = warehouse_repository::soft_delete(&self.pool, id).await?;
 
         if affected == 0 {
             return Err(AppError::NotFound("warehouse not found".to_string()).into());
         }
+
+        // Without this, inventory would keep accepting receipts into a warehouse
+        // that was just deleted, for as long as the TTL lasts.
+        self.invalidate(id).await;
 
         Ok(Response::new(()))
     }

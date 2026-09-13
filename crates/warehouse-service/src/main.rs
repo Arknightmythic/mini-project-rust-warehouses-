@@ -20,12 +20,28 @@ async fn main() -> anyhow::Result<()> {
 
     sqlx::migrate!("./migrations").run(&pool).await?;
 
+    let cache = if config.redis_url.is_empty() {
+        tracing::info!("no REDIS_URL set, running without a cache");
+        None
+    } else {
+        match wms_core::cache::Cache::connect(&config.redis_url, config.cache_ttl_secs).await {
+            Ok(cache) => {
+                tracing::info!(ttl = config.cache_ttl_secs, "cache connected");
+                Some(cache)
+            }
+            Err(err) => {
+                tracing::warn!(error = %err, "cache unavailable, serving from the database only");
+                None
+            }
+        }
+    };
+
     let addr = config.grpc_addr.parse()?;
 
     tracing::info!("warehouse-service listening on {addr}");
     Server::builder()
         .layer(wms_core::grpc::trace_layer())
-        .add_service(WarehouseServiceServer::new(WarehouseGrpcService::new(pool)))
+        .add_service(WarehouseServiceServer::new(WarehouseGrpcService::new(pool, cache)))
         .serve(addr)
         .await?;
 

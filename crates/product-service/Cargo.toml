@@ -14,11 +14,12 @@ name = "product-service-seed"
 path = "src/bin/seed.rs"
 
 [dependencies]
-wms-core = { workspace = true, features = ["grpc"] }
+wms-core = { workspace = true, features = ["grpc", "cache"] }
 wms-proto = { workspace = true }
 
 anyhow = { workspace = true }
 chrono = { workspace = true }
+serde = { workspace = true }
 sqlx = { workspace = true }
 tokio = { workspace = true }
 tonic = { workspace = true }

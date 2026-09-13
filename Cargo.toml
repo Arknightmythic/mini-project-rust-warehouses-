@@ -35,6 +35,10 @@ prost-types = "0.14.4"
 tonic-prost-build = "0.14.6"
 protox = "0.9.1"
 
+# --- caching ---
+# Default features carry no TLS backend, so this does not reintroduce rustls.
+redis = { version = "1.7", features = ["tokio-comp", "connection-manager"] }
+
 # --- observability ---
 # Version lockstep matters: all opentelemetry* share 0.32 and tracing-opentelemetry
 # sits exactly one minor ahead. Mismatch pulls two copies of opentelemetry and
