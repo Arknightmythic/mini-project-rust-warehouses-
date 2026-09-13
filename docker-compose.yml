@@ -222,6 +222,9 @@ services:
       JWT_SECRET: secret
       JWT_ISSUER: secret
       SWEEPER_INTERVAL_SECS: 10
+      EVENT_DELIVERY: ${EVENT_DELIVERY:-outbox}
+      OUTBOX_INTERVAL_MS: 200
+      CRASH_AFTER_COMMIT: ${CRASH_AFTER_COMMIT:-}
       RESERVATION_TIMEOUT_SECS: 30
     ports:
       - "50054:50054"

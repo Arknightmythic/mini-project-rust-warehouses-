@@ -84,6 +84,42 @@ impl EventPublisher {
     }
 }
 
+impl EventPublisher {
+    // Used by an outbox relay: the envelope was serialised earlier, possibly by a
+    // process that has since died, so the trace context comes from the stored row
+    // rather than from whatever span happens to be current now.
+    pub async fn publish_raw(
+        &self,
+        routing_key: &str,
+        payload: &serde_json::Value,
+        trace_parent: Option<&str>,
+    ) -> anyhow::Result<()> {
+        let body = serde_json::to_vec(payload)?;
+
+        let mut headers = FieldTable::default();
+        if let Some(value) = trace_parent {
+            headers.insert("traceparent".into(), AMQPValue::LongString(value.into()));
+        }
+
+        self.channel
+            .basic_publish(
+                topology::EXCHANGE.into(),
+                routing_key.into(),
+                BasicPublishOptions::default(),
+                &body,
+                BasicProperties::default()
+                    .with_delivery_mode(2)
+                    .with_content_type("application/json".into())
+                    .with_headers(headers),
+            )
+            .await?
+            .await?;
+
+        tracing::info!(routing_key, "event published from outbox");
+        Ok(())
+    }
+}
+
 struct MapInjector<'a>(&'a mut HashMap<String, String>);
 
 impl Injector for MapInjector<'_> {
@@ -92,7 +128,7 @@ impl Injector for MapInjector<'_> {
     }
 }
 
-fn current_traceparent() -> Option<String> {
+pub fn current_traceparent() -> Option<String> {
     let context = tracing::Span::current().context();
     let mut carrier = HashMap::new();
 

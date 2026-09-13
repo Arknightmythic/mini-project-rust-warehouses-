@@ -228,6 +228,43 @@ impl InventoryService for InventoryGrpcService {
             })
             .collect();
 
+        // Build the event BEFORE the write so the outbox row and the stock change
+        // land in the same transaction. The receipt id is not known yet, so the
+        // payload is completed by the repository once the row exists.
+        let event_lines: Vec<ReceivedLine> = items
+            .iter()
+            .map(|item| ReceivedLine {
+                product_id: item.product_id,
+                quantity: item.quantity,
+            })
+            .collect();
+
+        let use_outbox = self.config.event_delivery == "outbox";
+
+        let outbox_event = if use_outbox {
+            let envelope = Envelope::new(
+                "inventory.stock.received",
+                StockReceived {
+                    receipt_id: 0,
+                    warehouse_id: req.warehouse_id,
+                    reference_no: req.reference_no.clone(),
+                    received_by: identity.user_id,
+                    lines: event_lines.clone(),
+                },
+            );
+
+            Some(crate::outbox::OutboxEvent {
+                event_id: envelope.event_id,
+                event_type: envelope.event_type.clone(),
+                routing_key: wms_events::topology::ROUTING_STOCK_RECEIVED.to_string(),
+                payload: serde_json::to_value(&envelope)
+                    .map_err(|err| AppError::Internal(anyhow::anyhow!(err)))?,
+                trace_parent: wms_events::current_traceparent(),
+            })
+        } else {
+            None
+        };
+
         let receipt = inventory_repository::insert_receipt(
             &self.pool,
             req.warehouse_id,
@@ -235,6 +272,7 @@ impl InventoryService for InventoryGrpcService {
             &req.idempotency_key,
             identity.user_id,
             &items,
+            outbox_event.as_ref(),
         )
         .await?;
 
@@ -243,41 +281,29 @@ impl InventoryService for InventoryGrpcService {
             warehouse_id = req.warehouse_id,
             lines = items.len(),
             by = identity.user_id,
+            delivery = %self.config.event_delivery,
             "stock received"
         );
 
-        // KNOWN BUG, LEFT IN DELIBERATELY: this publishes AFTER the transaction
-        // committed. If the process dies between COMMIT and this line, the stock
-        // exists but nobody is ever told - the dual-write problem. The fix is a
-        // transactional outbox, and it lands in a later phase on purpose: watching
-        // your own code lose an event teaches it far better than reading about it.
-        //
-        // Note also that a publish failure does NOT fail the request. The stock is
-        // genuinely received; refusing the caller now would be a lie.
-        if let Some(publisher) = &self.events {
-            let event = Envelope::new(
-                "inventory.stock.received",
-                StockReceived {
-                    receipt_id: receipt.id,
-                    warehouse_id: receipt.warehouse_id,
-                    reference_no: receipt.reference_no.clone(),
-                    received_by: identity.user_id,
-                    lines: items
-                        .iter()
-                        .map(|item| ReceivedLine {
-                            product_id: item.product_id,
-                            quantity: item.quantity,
-                        })
-                        .collect(),
-                },
-            );
-
-            if let Err(err) = publisher
-                .publish(wms_events::topology::ROUTING_STOCK_RECEIVED, event)
-                .await
-            {
-                tracing::error!(error = ?err, receipt_id = receipt.id, "failed to publish StockReceived");
-            }
+        // The original dual-write path, kept only so the two can be compared.
+        // Publishing here happens AFTER the commit, so a crash in between loses the
+        // event permanently. With EVENT_DELIVERY=outbox this branch never runs and
+        // the relay delivers from the database instead.
+        if !use_outbox {
+            self.publish(
+                wms_events::topology::ROUTING_STOCK_RECEIVED,
+                Envelope::new(
+                    "inventory.stock.received",
+                    StockReceived {
+                        receipt_id: receipt.id,
+                        warehouse_id: receipt.warehouse_id,
+                        reference_no: receipt.reference_no.clone(),
+                        received_by: identity.user_id,
+                        lines: event_lines,
+                    },
+                ),
+            )
+            .await;
         }
 
         Ok(Response::new(ReceiveStockResponse {

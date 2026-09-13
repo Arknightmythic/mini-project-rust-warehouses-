@@ -2,3 +2,12 @@
 .env
 PENJELASAN_KODE.md
 
+
+# Benchmark harness. Kept out of the repo on purpose: v2 exists to learn the
+# architecture, and a v1-vs-v2 latency table is not the point of the project.
+bench/
+run_bench.sh
+k6/bench_shared.js
+
+# Catatan belajar pribadi, tidak ikut di-commit.
+PENJELASAN_KODE_V2.md

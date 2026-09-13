@@ -6,4 +6,4 @@ pub mod topology;
 pub use envelope::{
     Envelope, ReceivedLine, StockReceived, StockReservationReleased, StockReserved, StockShipped,
 };
-pub use publisher::EventPublisher;
+pub use publisher::{EventPublisher, current_traceparent};

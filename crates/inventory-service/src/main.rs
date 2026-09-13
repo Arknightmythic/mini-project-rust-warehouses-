@@ -1,5 +1,6 @@
 mod config;
 mod models;
+mod outbox;
 mod repositories;
 mod saga;
 mod sweeper;
@@ -59,7 +60,16 @@ async fn main() -> anyhow::Result<()> {
     let addr = config.grpc_addr.parse()?;
 
     let config = std::sync::Arc::new(config);
-    let service = InventoryGrpcService::new(pool, warehouses, products, events, config.clone());
+    let service = InventoryGrpcService::new(pool.clone(), warehouses, products, events.clone(), config.clone());
+
+    // Drains the outbox to the broker. Without this the events would be durably
+    // stored and never delivered.
+    if let Some(publisher) = events.clone() {
+        if config.event_delivery == "outbox" {
+            outbox::spawn_relay(pool.clone(), publisher, config.outbox_interval_ms);
+            tracing::info!(every_ms = config.outbox_interval_ms, "outbox relay started");
+        }
+    }
 
     sweeper::spawn(
         service.clone(),

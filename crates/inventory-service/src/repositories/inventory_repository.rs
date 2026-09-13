@@ -47,6 +47,7 @@ pub async fn insert_receipt(
     idempotency_key: &str,
     created_by: i64,
     items: &[NewReceiptItem],
+    outbox_event: Option<&crate::outbox::OutboxEvent>,
 ) -> Result<InboundReceipt, AppError> {
     let mut tx = pool.begin().await?;
 
@@ -104,7 +105,32 @@ pub async fn insert_receipt(
         .await?;
     }
 
+    // Same transaction as everything above. Either the stock moved and the event
+    // exists, or neither happened.
+    if let Some(event) = outbox_event {
+        // The payload was built before the row existed, so the real id goes in now.
+        let mut payload = event.payload.clone();
+        if let Some(inner) = payload.get_mut("payload").and_then(|v| v.as_object_mut()) {
+            inner.insert("receipt_id".to_string(), serde_json::json!(receipt.id));
+        }
+
+        crate::outbox::enqueue(&mut tx, event, &payload).await?;
+    }
+
     tx.commit().await?;
+
+    // Simulates the process dying in the gap that used to lose events. With the
+    // old direct-publish path this kills the event forever; with the outbox the
+    // relay picks it up after restart.
+    // is_ok() alone is a trap here: docker compose writes ${VAR:-} as an EMPTY
+    // variable rather than an absent one, and env::var returns Ok("") for that.
+    // The flag has to be checked for a truthy VALUE, not merely for existence.
+    if std::env::var("CRASH_AFTER_COMMIT")
+        .is_ok_and(|value| !value.is_empty() && value != "0" && value != "false")
+    {
+        tracing::error!("CRASH_AFTER_COMMIT set, exiting immediately after commit");
+        std::process::exit(1);
+    }
 
     Ok(receipt)
 }

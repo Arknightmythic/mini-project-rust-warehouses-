@@ -8,6 +8,10 @@ pub struct ServiceConfig {
     pub amqp_url: String,
     pub jwt_secret: String,
     pub jwt_issuer: String,
+    // "outbox" (safe) or "direct" (the original dual-write bug, kept so the two
+    // can be compared side by side).
+    pub event_delivery: String,
+    pub outbox_interval_ms: u64,
     pub sweeper_interval_secs: u64,
     pub reservation_timeout_secs: i64,
 }
@@ -21,6 +25,8 @@ impl ServiceConfig {
             amqp_url: env_var_or("AMQP_URL", ""),
             jwt_secret: wms_core::config::env_var("JWT_SECRET"),
             jwt_issuer: wms_core::config::env_var("JWT_ISSUER"),
+            event_delivery: env_var_or("EVENT_DELIVERY", "outbox"),
+            outbox_interval_ms: wms_core::config::env_parse_or("OUTBOX_INTERVAL_MS", 200),
             sweeper_interval_secs: wms_core::config::env_parse_or("SWEEPER_INTERVAL_SECS", 30),
             reservation_timeout_secs: wms_core::config::env_parse_or("RESERVATION_TIMEOUT_SECS", 300),
         }

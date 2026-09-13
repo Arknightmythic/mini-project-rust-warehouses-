@@ -11,3 +11,4 @@
 *.yaml text eol=lf
 *.json text eol=lf
 Dockerfile text eol=lf
+*.js text eol=lf
