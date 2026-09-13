@@ -1,37 +1,25 @@
+use std::ops::Deref;
+
 use axum::extract::FromRequestParts;
 use axum::http::request::Parts;
-use axum_extra::headers::authorization::Bearer;
-use axum_extra::headers::Authorization;
 use axum_extra::TypedHeader;
+use axum_extra::headers::Authorization;
+use axum_extra::headers::authorization::Bearer;
+use wms_core::{AppError, Identity};
 
 use crate::state::AppState;
-use crate::utils::error::AppError;
-use crate::utils::jwt::verify_token;
 
-#[derive(Debug, Clone)]
-pub struct AuthUser {
-    pub user_id: i64,
-    // carried for handlers that need the caller's identity, e.g. audit logging
-    #[allow(dead_code)]
-    pub email: String,
-    pub roles: Vec<String>,
-}
+// Identity belongs to wms-core and FromRequestParts belongs to axum, so the orphan
+// rule rules out implementing the trait for Identity here. A local newtype is the
+// way through, and Deref keeps handlers reading `auth.user_id` / `auth.require_role`
+// exactly as before.
+pub struct AuthUser(pub Identity);
 
-impl AuthUser {
-    pub fn require_role(&self, role: &str) -> Result<(), AppError> {
-        if self.roles.iter().any(|r| r == role) {
-            Ok(())
-        } else {
-            Err(AppError::Forbidden)
-        }
-    }
+impl Deref for AuthUser {
+    type Target = Identity;
 
-    pub fn require_any_role(&self, roles: &[&str]) -> Result<(), AppError> {
-        if roles.iter().any(|role| self.roles.iter().any(|r| r == role)) {
-            Ok(())
-        } else {
-            Err(AppError::Forbidden)
-        }
+    fn deref(&self) -> &Self::Target {
+        &self.0
     }
 }
 
@@ -47,12 +35,12 @@ impl FromRequestParts<AppState> for AuthUser {
                 .await
                 .map_err(|_| AppError::Unauthorized)?;
 
-        let claims = verify_token(&state.config, bearer.token())?;
+        let claims = wms_core::jwt::verify_token(
+            &state.config.jwt_secret,
+            &state.config.jwt_issuer,
+            bearer.token(),
+        )?;
 
-        Ok(AuthUser {
-            user_id: claims.sub,
-            email: claims.email,
-            roles: claims.roles,
-        })
+        Ok(AuthUser(claims.into()))
     }
 }

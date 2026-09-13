@@ -6,7 +6,7 @@ use crate::middlewares::AuthUser;
 use crate::models::warehouse::{CreateWarehouseRequest, UpdateWarehouseRequest, Warehouse};
 use crate::repositories::warehouse_repository;
 use crate::state::AppState;
-use crate::utils::error::{AppError, AppResult};
+use wms_core::{AppError, AppResult};
 
 const MANAGER_ROLES: [&str; 2] = ["admin", "warehouse_manager"];
 

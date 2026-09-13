@@ -4,20 +4,19 @@ mod models;
 mod repositories;
 mod routes;
 mod state;
-mod utils;
 
 use std::sync::Arc;
 
-use configs::{database, AppConfig};
+use configs::{AppConfig, database};
 use state::AppState;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    dotenvy::dotenv().ok();
-    tracing_subscriber::fmt::init();
+    wms_core::config::load_dotenv(env!("CARGO_MANIFEST_DIR"));
+    wms_core::telemetry::init("legacy-monolith");
 
     let config = AppConfig::from_env();
-    let pool = database::connect(&config).await?;
+    let pool = database::connect().await?;
 
     let server_url = config.server_url.clone();
     let server_port = config.server_port;

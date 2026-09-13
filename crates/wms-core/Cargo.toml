@@ -1,0 +1,24 @@
+[package]
+name = "wms-core"
+version.workspace = true
+edition.workspace = true
+
+[features]
+default = []
+# Gated so services without an HTTP surface never compile axum.
+axum = ["dep:axum"]
+# Gated so crates that never speak gRPC do not compile tonic.
+grpc = ["dep:tonic"]
+
+[dependencies]
+anyhow = { workspace = true }
+axum = { workspace = true, optional = true }
+dotenvy = { workspace = true }
+jsonwebtoken = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sqlx = { workspace = true }
+thiserror = { workspace = true }
+tonic = { workspace = true, optional = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }

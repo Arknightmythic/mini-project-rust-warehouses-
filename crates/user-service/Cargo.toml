@@ -1,0 +1,27 @@
+[package]
+name = "user-service"
+version.workspace = true
+edition.workspace = true
+default-run = "user-service"
+autobins = false
+
+[[bin]]
+name = "user-service"
+path = "src/main.rs"
+
+[[bin]]
+name = "user-service-seed"
+path = "src/bin/seed.rs"
+
+[dependencies]
+wms-core = { workspace = true, features = ["grpc"] }
+wms-proto = { workspace = true }
+
+anyhow = { workspace = true }
+bcrypt = { workspace = true }
+chrono = { workspace = true }
+jsonwebtoken = { workspace = true }
+sqlx = { workspace = true }
+tokio = { workspace = true }
+tonic = { workspace = true }
+tracing = { workspace = true }

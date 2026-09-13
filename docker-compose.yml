@@ -1,12 +1,32 @@
 services:
-  postgres:
+  postgres-user:
+    image: postgres:17-alpine
+    container_name: postgres-user
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: lokal
+      POSTGRES_DB: warehouse_user_db
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_user_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # Temporary: still owns warehouses until Phase 3 moves them out.
+  postgres-legacy:
     image: postgres:16-alpine
     environment:
       POSTGRES_USER: postgres
       POSTGRES_DB: warehouse-rust
       POSTGRES_HOST_AUTH_METHOD: trust
+    restart: unless-stopped
     ports:
-      - "5432:5432"
+      - "5439:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -15,39 +35,80 @@ services:
       timeout: 5s
       retries: 10
 
-  app:
+  user-service:
     build:
       context: .
       args:
-        SERVICE: legacy-monolith
-    ports:
-      - "8080:8080"
+        SERVICE: user-service
     environment:
-      SERVER_URL: 0.0.0.0
-      SERVER_PORT: 8080
-      DATABASE_URL: postgresql://postgres@postgres:5432/warehouse-rust
+      GRPC_ADDR: 0.0.0.0:50051
+      DATABASE_URL: postgresql://postgres:lokal@postgres-user:5432/warehouse_user_db
       DB_MAX_CONNECTIONS: 10
-      DB_CONNECTION_TIMEOUT_SECS: 10
-      DB_IDLE_TIMEOUT_SECS: 300
       JWT_SECRET: secret
       JWT_EXPIRATION_MINUTES: 60
       JWT_ISSUER: secret
+    ports:
+      - "50051:50051"
     depends_on:
-      postgres:
+      postgres-user:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c '</dev/tcp/127.0.0.1/50051'"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
-  seed:
+  api-gateway:
+    build:
+      context: .
+      args:
+        SERVICE: api-gateway
+    environment:
+      SERVER_URL: 0.0.0.0
+      SERVER_PORT: 8080
+      USER_SERVICE_URL: http://user-service:50051
+      JWT_SECRET: secret
+      JWT_ISSUER: secret
+    ports:
+      - "8080:8080"
+    # service_started, not service_healthy: the gateway must boot even when a
+    # downstream is broken, otherwise it is only as available as its weakest
+    # dependency. Failures surface per route as 503 instead.
+    depends_on:
+      user-service:
+        condition: service_started
+
+  legacy-monolith:
     build:
       context: .
       args:
         SERVICE: legacy-monolith
+    environment:
+      SERVER_URL: 0.0.0.0
+      SERVER_PORT: 8081
+      DATABASE_URL: postgresql://postgres@postgres-legacy:5432/warehouse-rust
+      DB_MAX_CONNECTIONS: 10
+      JWT_SECRET: secret
+      JWT_ISSUER: secret
+    ports:
+      - "8081:8081"
+    depends_on:
+      postgres-legacy:
+        condition: service_healthy
+
+  user-seed:
+    build:
+      context: .
+      args:
+        SERVICE: user-service
     entrypoint: ["/app/seed"]
     environment:
-      DATABASE_URL: postgresql://postgres@postgres:5432/warehouse-rust
+      DATABASE_URL: postgresql://postgres:lokal@postgres-user:5432/warehouse_user_db
     depends_on:
-      postgres:
+      postgres-user:
         condition: service_healthy
     profiles: ["tools"]
 
 volumes:
+  postgres_user_data:
   postgres_data:

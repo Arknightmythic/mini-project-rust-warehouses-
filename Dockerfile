@@ -13,8 +13,8 @@ COPY crates ./crates
 
 # Cache mounts are not persisted into the image layer, so everything that must
 # survive into the runtime stage has to be copied out inside this same RUN.
-RUN --mount=type=cache,target=/usr/local/cargo/registry \
-    --mount=type=cache,target=/app/target \
+RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
+    --mount=type=cache,target=/app/target,sharing=locked \
     cargo build --release -p ${SERVICE} && \
     mkdir -p /out && \
     cp /app/target/release/${SERVICE} /out/service && \
