@@ -68,7 +68,11 @@ where
             event_type = %envelope.event_type,
             event_id = %envelope.event_id,
         );
-        if let Some(traceparent) = envelope.trace_parent.clone() {
+        // Header first (the standard), envelope second (what older publishers
+        // wrote). Reading both is what makes the migration safe to roll out.
+        let traceparent = header_traceparent(&delivery).or_else(|| envelope.trace_parent.clone());
+
+        if let Some(traceparent) = traceparent {
             let carrier = TraceParentCarrier(traceparent);
             let parent =
                 global::get_text_map_propagator(|propagator| propagator.extract(&carrier));
@@ -97,6 +101,24 @@ where
     }
 
     Ok(())
+}
+
+// Walking a FieldTable is fiddly because AMQP strings come in two flavours and a
+// publisher in another language may well use the short one.
+fn header_traceparent(delivery: &lapin::message::Delivery) -> Option<String> {
+    let headers = delivery.properties.headers().as_ref()?;
+
+    headers.inner().iter().find_map(|(key, value)| {
+        if !key.as_str().eq_ignore_ascii_case("traceparent") {
+            return None;
+        }
+
+        match value {
+            lapin::types::AMQPValue::LongString(raw) => Some(raw.to_string()),
+            lapin::types::AMQPValue::ShortString(raw) => Some(raw.to_string()),
+            _ => None,
+        }
+    })
 }
 
 fn nack_no_requeue() -> BasicNackOptions {

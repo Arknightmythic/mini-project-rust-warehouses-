@@ -58,7 +58,8 @@ async fn main() -> anyhow::Result<()> {
 
     let addr = config.grpc_addr.parse()?;
 
-    let service = InventoryGrpcService::new(pool, warehouses, products, events);
+    let config = std::sync::Arc::new(config);
+    let service = InventoryGrpcService::new(pool, warehouses, products, events, config.clone());
 
     sweeper::spawn(
         service.clone(),

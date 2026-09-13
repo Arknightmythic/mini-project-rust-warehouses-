@@ -80,6 +80,7 @@ async fn receive_stock(
     // boundary behind magic is the wrong kind of convenience: the call site
     // should show that this gateway is vouching for the caller.
     wms_core::grpc::identity_to_metadata(&auth, request.metadata_mut());
+    wms_core::grpc::token_to_metadata(&auth.token, request.metadata_mut());
 
     let response = client
         .receive_stock(request)
@@ -250,6 +251,7 @@ async fn ship_stock(
         idempotency_key: body.idempotency_key,
     });
     wms_core::grpc::identity_to_metadata(&auth, request.metadata_mut());
+    wms_core::grpc::token_to_metadata(&auth.token, request.metadata_mut());
 
     let shipment = client
         .ship_stock(request)
@@ -270,6 +272,7 @@ async fn confirm_shipment(
 
     let mut request = Request::new(inventory_v1::ConfirmShipmentRequest { shipment_id: id });
     wms_core::grpc::identity_to_metadata(&auth, request.metadata_mut());
+    wms_core::grpc::token_to_metadata(&auth.token, request.metadata_mut());
 
     let shipment = client
         .confirm_shipment(request)
@@ -294,6 +297,7 @@ async fn cancel_shipment(
         reason: body.reason,
     });
     wms_core::grpc::identity_to_metadata(&auth, request.metadata_mut());
+    wms_core::grpc::token_to_metadata(&auth.token, request.metadata_mut());
 
     let shipment = client
         .cancel_shipment(request)

@@ -219,6 +219,8 @@ services:
       PRODUCT_SERVICE_URL: http://product-service:50053
       AMQP_URL: amqp://guest:guest@rabbitmq:5672/%2f
       # Deliberately short so the compensation demo is watchable.
+      JWT_SECRET: secret
+      JWT_ISSUER: secret
       SWEEPER_INTERVAL_SECS: 10
       RESERVATION_TIMEOUT_SECS: 30
     ports:

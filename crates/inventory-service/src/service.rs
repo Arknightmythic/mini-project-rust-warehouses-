@@ -30,6 +30,7 @@ pub struct InventoryGrpcService {
     warehouses: WarehouseServiceClient<TracedChannel>,
     products: ProductServiceClient<TracedChannel>,
     events: Option<EventPublisher>,
+    config: std::sync::Arc<crate::config::ServiceConfig>,
 }
 
 impl InventoryGrpcService {
@@ -38,13 +39,28 @@ impl InventoryGrpcService {
         warehouses: WarehouseServiceClient<TracedChannel>,
         products: ProductServiceClient<TracedChannel>,
         events: Option<EventPublisher>,
+        config: std::sync::Arc<crate::config::ServiceConfig>,
     ) -> Self {
         Self {
             pool,
             warehouses,
             products,
             events,
+            config,
         }
+    }
+
+    // Single place identity enters this service. Every handler goes through here,
+    // so there is no path that accidentally trusts an unverified header.
+    pub(crate) fn caller(
+        &self,
+        metadata: &tonic::metadata::MetadataMap,
+    ) -> Result<wms_core::Identity, AppError> {
+        wms_core::grpc::identity_from_verified_token(
+            metadata,
+            &self.config.jwt_secret,
+            &self.config.jwt_issuer,
+        )
     }
 
     pub(crate) fn pool(&self) -> &PgPool {
@@ -155,7 +171,7 @@ impl InventoryService for InventoryGrpcService {
         request: Request<ReceiveStockRequest>,
     ) -> Result<Response<ReceiveStockResponse>, Status> {
         // Metadata must be read before into_inner consumes the request.
-        let identity = wms_core::grpc::identity_from_metadata(request.metadata())?;
+        let identity = self.caller(request.metadata())?;
         identity.require_any_role(&RECEIVER_ROLES)?;
 
         let req = request.into_inner();

@@ -11,13 +11,18 @@ use crate::state::AppState;
 
 // The gateway is the only place a raw JWT is inspected. Everything downstream
 // receives identity that has already been verified here.
-pub struct AuthUser(pub Identity);
+pub struct AuthUser {
+    pub identity: Identity,
+    // Kept so it can be forwarded downstream. Services then verify the signature
+    // themselves instead of taking the gateway at its word.
+    pub token: String,
+}
 
 impl Deref for AuthUser {
     type Target = Identity;
 
     fn deref(&self) -> &Self::Target {
-        &self.0
+        &self.identity
     }
 }
 
@@ -39,6 +44,9 @@ impl FromRequestParts<AppState> for AuthUser {
             bearer.token(),
         )?;
 
-        Ok(AuthUser(claims.into()))
+        Ok(AuthUser {
+            identity: claims.into(),
+            token: bearer.token().to_string(),
+        })
     }
 }

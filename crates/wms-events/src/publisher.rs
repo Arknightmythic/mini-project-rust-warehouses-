@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use lapin::options::BasicPublishOptions;
+use lapin::types::{AMQPValue, FieldTable};
 use lapin::{BasicProperties, Channel, Connection, ConnectionProperties};
 use opentelemetry::global;
 use opentelemetry::propagation::Injector;
@@ -37,9 +38,25 @@ impl EventPublisher {
         routing_key: &str,
         mut envelope: Envelope<T>,
     ) -> anyhow::Result<()> {
-        envelope.trace_parent = current_traceparent();
+        let traceparent = current_traceparent();
+
+        // Still written into the body as well, so consumers running the previous
+        // build keep linking their traces while a deploy is half rolled out.
+        // Remove once every consumer reads the header.
+        envelope.trace_parent = traceparent.clone();
 
         let body = serde_json::to_vec(&envelope)?;
+
+        // The standard place for trace context on a non-HTTP transport is the
+        // message headers, not the payload. The payload belongs to the domain;
+        // transport metadata does not.
+        let mut headers = FieldTable::default();
+        if let Some(value) = &traceparent {
+            headers.insert(
+                "traceparent".into(),
+                AMQPValue::LongString(value.as_str().into()),
+            );
+        }
 
         let confirm = self
             .channel
@@ -53,7 +70,8 @@ impl EventPublisher {
                 // point of a durable queue.
                 BasicProperties::default()
                     .with_delivery_mode(2)
-                    .with_content_type("application/json".into()),
+                    .with_content_type("application/json".into())
+                    .with_headers(headers),
             )
             .await?;
 

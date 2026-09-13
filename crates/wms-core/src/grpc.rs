@@ -23,8 +23,34 @@ pub fn identity_to_metadata(identity: &Identity, metadata: &mut MetadataMap) {
     }
 }
 
-// Downstream trusts this because only the gateway can reach it. That assumption
-// is the trust boundary, and it is closed properly in a later phase.
+// Forwards the caller's own credential, not just an assertion about them. This is
+// what turns "the gateway says you are an admin" into "prove it".
+pub fn token_to_metadata(token: &str, metadata: &mut MetadataMap) {
+    if let Ok(value) = MetadataValue::try_from(format!("Bearer {token}")) {
+        metadata.insert("authorization", value);
+    }
+}
+
+// DEFENSE IN DEPTH. The x-user-* headers are convenient and completely
+// unauthenticated: anyone who can open a socket to this service can set them. This
+// function ignores them entirely and derives identity from a signature it checks
+// itself, so reaching the service directly buys an attacker nothing.
+pub fn identity_from_verified_token(
+    metadata: &MetadataMap,
+    secret: &str,
+    issuer: &str,
+) -> Result<Identity, AppError> {
+    let raw = metadata
+        .get("authorization")
+        .and_then(|value| value.to_str().ok())
+        .and_then(|value| value.strip_prefix("Bearer "))
+        .ok_or(AppError::Unauthorized)?;
+
+    Ok(crate::jwt::verify_token(secret, issuer, raw)?.into())
+}
+
+// Kept for logging and debugging only. Never use it to make an authorization
+// decision: see identity_from_verified_token above.
 pub fn identity_from_metadata(metadata: &MetadataMap) -> Result<Identity, AppError> {
     let get = |key: &str| -> Option<String> {
         metadata

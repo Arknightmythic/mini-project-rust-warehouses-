@@ -47,7 +47,7 @@ impl InventoryGrpcService {
         &self,
         request: Request<ShipStockRequest>,
     ) -> Result<Response<Shipment>, Status> {
-        let identity = wms_core::grpc::identity_from_metadata(request.metadata())?;
+        let identity = self.caller(request.metadata())?;
         identity.require_any_role(&SHIPPER_ROLES)?;
 
         let req = request.into_inner();
@@ -116,7 +116,7 @@ impl InventoryGrpcService {
         &self,
         request: Request<ConfirmShipmentRequest>,
     ) -> Result<Response<Shipment>, Status> {
-        let identity = wms_core::grpc::identity_from_metadata(request.metadata())?;
+        let identity = self.caller(request.metadata())?;
         identity.require_any_role(&SHIPPER_ROLES)?;
 
         let shipment_id = request.into_inner().shipment_id;
@@ -194,7 +194,7 @@ impl InventoryGrpcService {
         &self,
         request: Request<CancelShipmentRequest>,
     ) -> Result<Response<Shipment>, Status> {
-        let identity = wms_core::grpc::identity_from_metadata(request.metadata())?;
+        let identity = self.caller(request.metadata())?;
         identity.require_any_role(&SHIPPER_ROLES)?;
 
         let req = request.into_inner();
