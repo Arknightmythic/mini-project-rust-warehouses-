@@ -78,3 +78,15 @@ pub async fn soft_delete(pool: &PgPool, id: i64) -> Result<u64, AppError> {
 
     Ok(result.rows_affected())
 }
+
+// Returns just the name, not the row: the caller only needs to know it is there.
+pub async fn exists(pool: &PgPool, id: i64) -> Result<Option<String>, AppError> {
+    let row: Option<(String,)> = sqlx::query_as(
+        "SELECT name FROM public.warehouses WHERE id = $1 AND delete_at IS NULL",
+    )
+    .bind(id)
+    .fetch_optional(pool)
+    .await?;
+
+    Ok(row.map(|(name,)| name))
+}

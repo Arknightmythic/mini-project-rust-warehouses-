@@ -53,6 +53,24 @@ services:
       timeout: 5s
       retries: 10
 
+  postgres-inventory:
+    image: postgres:17-alpine
+    container_name: postgres-inventory
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: lokal
+      POSTGRES_DB: warehouse_inventory_db
+    restart: unless-stopped
+    ports:
+      - "5434:5432"
+    volumes:
+      - postgres_inventory_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
   user-service:
     build:
       context: .
@@ -116,6 +134,32 @@ services:
       timeout: 5s
       retries: 5
 
+  inventory-service:
+    build:
+      context: .
+      args:
+        SERVICE: inventory-service
+    environment:
+      GRPC_ADDR: 0.0.0.0:50054
+      DATABASE_URL: postgresql://postgres:lokal@postgres-inventory:5432/warehouse_inventory_db
+      DB_MAX_CONNECTIONS: 10
+      WAREHOUSE_SERVICE_URL: http://warehouse-service:50052
+      PRODUCT_SERVICE_URL: http://product-service:50053
+    ports:
+      - "50054:50054"
+    depends_on:
+      postgres-inventory:
+        condition: service_healthy
+      warehouse-service:
+        condition: service_started
+      product-service:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c '</dev/tcp/127.0.0.1/50054'"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   api-gateway:
     build:
       context: .
@@ -127,6 +171,7 @@ services:
       USER_SERVICE_URL: http://user-service:50051
       WAREHOUSE_SERVICE_URL: http://warehouse-service:50052
       PRODUCT_SERVICE_URL: http://product-service:50053
+      INVENTORY_SERVICE_URL: http://inventory-service:50054
       JWT_SECRET: secret
       JWT_ISSUER: secret
     ports:
@@ -140,6 +185,8 @@ services:
       warehouse-service:
         condition: service_started
       product-service:
+        condition: service_started
+      inventory-service:
         condition: service_started
 
   product-seed:
@@ -172,3 +219,4 @@ volumes:
   postgres_user_data:
   postgres_warehouse_data:
   postgres_product_data:
+  postgres_inventory_data:

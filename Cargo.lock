@@ -1164,6 +1164,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "inventory-service"
+version = "0.2.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "sqlx",
+ "tokio",
+ "tonic",
+ "tracing",
+ "wms-core",
+ "wms-proto",
+]
+
+[[package]]
 name = "itertools"
 version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"

@@ -39,10 +39,20 @@ message UpdateWarehouseRequest {
 
 message DeleteWarehouseRequest { int64 id = 1; }
 
+// Purpose-built for callers that only need a yes/no. Deliberately not GetWarehouse:
+// a narrow RPC lets the owner answer cheaply and stops consumers from quietly
+// depending on fields they were never meant to read.
+message WarehouseExistsRequest { int64 id = 1; }
+message WarehouseExistsResponse {
+  bool exists = 1;
+  string name = 2;
+}
+
 service WarehouseService {
   rpc GetWarehouse(GetWarehouseRequest) returns (Warehouse);
   rpc ListWarehouses(ListWarehousesRequest) returns (ListWarehousesResponse);
   rpc CreateWarehouse(CreateWarehouseRequest) returns (Warehouse);
   rpc UpdateWarehouse(UpdateWarehouseRequest) returns (Warehouse);
   rpc DeleteWarehouse(DeleteWarehouseRequest) returns (google.protobuf.Empty);
+  rpc WarehouseExists(WarehouseExistsRequest) returns (WarehouseExistsResponse);
 }

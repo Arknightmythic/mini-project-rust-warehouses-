@@ -7,6 +7,7 @@ pub struct GatewayConfig {
     pub user_service_url: String,
     pub warehouse_service_url: String,
     pub product_service_url: String,
+    pub inventory_service_url: String,
     pub jwt_secret: String,
     pub jwt_issuer: String,
 }
@@ -19,6 +20,7 @@ impl GatewayConfig {
             user_service_url: env_var_or("USER_SERVICE_URL", "http://127.0.0.1:50051"),
             warehouse_service_url: env_var_or("WAREHOUSE_SERVICE_URL", "http://127.0.0.1:50052"),
             product_service_url: env_var_or("PRODUCT_SERVICE_URL", "http://127.0.0.1:50053"),
+            inventory_service_url: env_var_or("INVENTORY_SERVICE_URL", "http://127.0.0.1:50054"),
             jwt_secret: env_var("JWT_SECRET"),
             jwt_issuer: env_var("JWT_ISSUER"),
         }

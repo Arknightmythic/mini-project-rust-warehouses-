@@ -16,6 +16,12 @@ pub mod product {
     }
 }
 
+pub mod inventory {
+    pub mod v1 {
+        include!("generated/wms.inventory.v1.rs");
+    }
+}
+
 use chrono::{DateTime, Utc};
 use prost_types::Timestamp;
 

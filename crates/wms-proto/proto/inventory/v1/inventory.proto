@@ -1,0 +1,71 @@
+syntax = "proto3";
+
+package wms.inventory.v1;
+
+import "google/protobuf/timestamp.proto";
+
+message StockBalance {
+  int64 warehouse_id = 1;
+  int64 product_id = 2;
+  int64 qty_on_hand = 3;
+  int64 qty_reserved = 4;
+  int64 qty_available = 5;
+  google.protobuf.Timestamp updated_at = 6;
+}
+
+message StockMovement {
+  int64 id = 1;
+  int64 warehouse_id = 2;
+  int64 product_id = 3;
+  string movement_type = 4;
+  int64 quantity = 5;
+  optional string reference_type = 6;
+  optional int64 reference_id = 7;
+  google.protobuf.Timestamp created_at = 8;
+}
+
+message ReceiptItem {
+  int64 product_id = 1;
+  int64 quantity = 2;
+  // Whole rupiah. No floats, no decimal type: IDR has no practical minor unit.
+  int64 unit_cost = 3;
+}
+
+message ReceiveStockRequest {
+  int64 warehouse_id = 1;
+  optional string reference_no = 2;
+  repeated ReceiptItem items = 3;
+  // Non-negotiable. A retried request must not double-count stock.
+  string idempotency_key = 4;
+}
+
+message ReceiveStockResponse {
+  int64 receipt_id = 1;
+  int64 warehouse_id = 2;
+  optional string reference_no = 3;
+  repeated ReceiptItem items = 4;
+  google.protobuf.Timestamp created_at = 5;
+  // True when this request was a replay of one already applied.
+  bool idempotent_replay = 6;
+}
+
+message GetStockBalanceRequest {
+  int64 warehouse_id = 1;
+  int64 product_id = 2;
+}
+
+message ListStockBalancesRequest { optional int64 warehouse_id = 1; }
+message ListStockBalancesResponse { repeated StockBalance balances = 1; }
+
+message ListStockMovementsRequest {
+  optional int64 warehouse_id = 1;
+  optional int64 product_id = 2;
+}
+message ListStockMovementsResponse { repeated StockMovement movements = 1; }
+
+service InventoryService {
+  rpc ReceiveStock(ReceiveStockRequest) returns (ReceiveStockResponse);
+  rpc GetStockBalance(GetStockBalanceRequest) returns (StockBalance);
+  rpc ListStockBalances(ListStockBalancesRequest) returns (ListStockBalancesResponse);
+  rpc ListStockMovements(ListStockMovementsRequest) returns (ListStockMovementsResponse);
+}

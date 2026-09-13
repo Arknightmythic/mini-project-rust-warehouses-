@@ -70,7 +70,10 @@ export default function () {
     const listProductsRes = http.get(`${BASE_URL}/api/products`, authHeaders(token));
     check(listProductsRes, {
         'list products status 200': (r) => r.status === 200,
-        'seeded products present': (r) => r.json().length >= 4,
+        // Assert on a stable fact, not on a count: this same test creates and
+        // deactivates products every iteration, so any total is a moving target.
+        'seeded product is listed': (r) => r.json().some((p) => p.sku === 'SKU-BYM-001'),
+        'inactive products are hidden': (r) => r.json().every((p) => p.is_active === true),
     });
 
     const sku = `SKU-K6-${__VU}-${__ITER}-${Date.now()}`;
@@ -98,6 +101,74 @@ export default function () {
     check(afterDeactivateRes, {
         'deactivated product still readable': (r) => r.status === 200,
         'deactivated product is inactive': (r) => r.json('is_active') === false,
+    });
+
+    // Inventory needs a live warehouse, so it gets its own rather than reusing the
+    // one the warehouse block soft-deletes above.
+    const invWarehouseRes = http.post(
+        `${BASE_URL}/api/warehouses`,
+        JSON.stringify({ name: `K6 Inv WH ${__VU}-${__ITER}-${Date.now()}`, address: 'Jl. Inventory' }),
+        authHeaders(token),
+    );
+    const invWarehouseId = invWarehouseRes.json('id');
+    const idemKey = `k6-${__VU}-${__ITER}-${Date.now()}`;
+
+    // One HTTP call that fans out to warehouse-service and product-service before
+    // it is allowed to touch the database.
+    const receiptRes = http.post(
+        `${BASE_URL}/api/inventory/receipts`,
+        JSON.stringify({
+            warehouse_id: invWarehouseId,
+            reference_no: 'K6-PO',
+            idempotency_key: idemKey,
+            items: [{ product_id: 1, quantity: 7, unit_cost: 5000 }],
+        }),
+        authHeaders(token),
+    );
+    check(receiptRes, {
+        'receive stock status 200': (r) => r.status === 200,
+        'receipt is not a replay': (r) => r.json('idempotent_replay') === false,
+    });
+
+    const balanceRes = http.get(
+        `${BASE_URL}/api/inventory/balances/${invWarehouseId}/1`,
+        authHeaders(token),
+    );
+    check(balanceRes, {
+        'balance reflects receipt': (r) => r.json('qty_on_hand') === 7,
+        'nothing reserved yet': (r) => r.json('qty_reserved') === 0,
+    });
+
+    const replayRes = http.post(
+        `${BASE_URL}/api/inventory/receipts`,
+        JSON.stringify({
+            warehouse_id: invWarehouseId,
+            reference_no: 'K6-PO',
+            idempotency_key: idemKey,
+            items: [{ product_id: 1, quantity: 7, unit_cost: 5000 }],
+        }),
+        authHeaders(token),
+    );
+    check(replayRes, { 'replay is flagged': (r) => r.json('idempotent_replay') === true });
+
+    const afterReplayRes = http.get(
+        `${BASE_URL}/api/inventory/balances/${invWarehouseId}/1`,
+        authHeaders(token),
+    );
+    check(afterReplayRes, { 'replay did not double the stock': (r) => r.json('qty_on_hand') === 7 });
+
+    const unknownProductRes = http.post(
+        `${BASE_URL}/api/inventory/receipts`,
+        JSON.stringify({
+            warehouse_id: invWarehouseId,
+            idempotency_key: `${idemKey}-bad`,
+            items: [{ product_id: 999999, quantity: 1 }],
+        }),
+        { ...authHeaders(token), responseCallback: http.expectedStatuses(400) },
+    );
+    check(unknownProductRes, {
+        'unknown product rejected 400': (r) => r.status === 400,
+        'error names the product': (r) => r.json('message').indexOf('999999') !== -1,
     });
 
     sleep(1);

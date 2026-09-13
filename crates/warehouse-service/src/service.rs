@@ -4,7 +4,8 @@ use wms_core::AppError;
 use wms_proto::warehouse::v1::warehouse_service_server::WarehouseService;
 use wms_proto::warehouse::v1::{
     CreateWarehouseRequest, DeleteWarehouseRequest, GetWarehouseRequest, ListWarehousesRequest,
-    ListWarehousesResponse, UpdateWarehouseRequest, Warehouse,
+    ListWarehousesResponse, UpdateWarehouseRequest, Warehouse, WarehouseExistsRequest,
+    WarehouseExistsResponse,
 };
 
 use crate::models;
@@ -98,6 +99,18 @@ impl WarehouseService for WarehouseGrpcService {
         .ok_or_else(|| AppError::NotFound("warehouse not found".to_string()))?;
 
         Ok(Response::new(to_proto(warehouse)))
+    }
+
+    async fn warehouse_exists(
+        &self,
+        request: Request<WarehouseExistsRequest>,
+    ) -> Result<Response<WarehouseExistsResponse>, Status> {
+        let found = warehouse_repository::exists(&self.pool, request.into_inner().id).await?;
+
+        Ok(Response::new(WarehouseExistsResponse {
+            exists: found.is_some(),
+            name: found.unwrap_or_default(),
+        }))
     }
 
     async fn delete_warehouse(
