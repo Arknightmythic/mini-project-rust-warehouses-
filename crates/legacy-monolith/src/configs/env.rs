@@ -22,7 +22,7 @@ impl AppConfig {
                 .unwrap_or_else(|_| "10".to_string())
                 .parse()
                 .expect("DB_MAX_CONNECTIONS must be a valid u32"),
-            jwt_secret: std::env::var("Jwt_SECRET").expect("Jwt_SECRET must be set"),
+            jwt_secret: std::env::var("JWT_SECRET").expect("JWT_SECRET must be set"),
             jwt_expiration_minutes: std::env::var("JWT_EXPIRATION_MINUTES")
                 .unwrap_or_else(|_| "60".to_string())
                 .parse()

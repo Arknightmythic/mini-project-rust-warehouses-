@@ -2,7 +2,7 @@
 set -e
 
 echo "Running database seeders..."
-cargo run --bin seed
+cargo run -p legacy-monolith --bin legacy-monolith-seed
 echo "Seeding complete."
 
 set -a

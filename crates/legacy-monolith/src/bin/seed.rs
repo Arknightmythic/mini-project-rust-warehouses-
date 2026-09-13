@@ -1,5 +1,16 @@
 use sqlx::postgres::PgPoolOptions;
-use std::path::Path;
+use std::path::{Path, PathBuf};
+
+// CARGO_MANIFEST_DIR is baked in at compile time, so it resolves on the host but
+// points at a nonexistent path inside the container — where ./seeders is correct.
+fn seeders_dir() -> PathBuf {
+    let in_crate = Path::new(env!("CARGO_MANIFEST_DIR")).join("seeders");
+    if in_crate.is_dir() {
+        in_crate
+    } else {
+        PathBuf::from("seeders")
+    }
+}
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -12,8 +23,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .connect(&database_url)
         .await?;
 
-    let seeders_dir = Path::new("seeders");
-    let mut entries: Vec<_> = std::fs::read_dir(seeders_dir)?
+    let mut entries: Vec<_> = std::fs::read_dir(seeders_dir())?
         .filter_map(|entry| entry.ok())
         .filter(|entry| entry.path().extension().is_some_and(|ext| ext == "sql"))
         .collect();
