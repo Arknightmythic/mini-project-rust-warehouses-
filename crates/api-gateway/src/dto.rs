@@ -1,6 +1,7 @@
 use chrono::{DateTime, Utc};
 use serde::Serialize;
 use wms_proto::user::v1 as user_v1;
+use wms_proto::product::v1 as product_v1;
 use wms_proto::warehouse::v1 as warehouse_v1;
 
 // protobuf timestamps are seconds+nanos; chrono serde renders RFC3339, which is
@@ -77,6 +78,56 @@ impl From<warehouse_v1::Warehouse> for WarehouseJson {
             photo: warehouse.photo,
             created_at: warehouse.created_at.as_ref().and_then(wms_proto::from_timestamp),
             updated_at: warehouse.updated_at.as_ref().and_then(wms_proto::from_timestamp),
+        }
+    }
+}
+
+#[derive(Serialize)]
+pub struct ProductJson {
+    pub id: i64,
+    pub sku: String,
+    pub name: String,
+    pub description: Option<String>,
+    pub unit: String,
+    pub barcode: Option<String>,
+    pub category_id: Option<i64>,
+    pub is_active: bool,
+    pub created_at: Option<DateTime<Utc>>,
+    pub updated_at: Option<DateTime<Utc>>,
+}
+
+impl From<product_v1::Product> for ProductJson {
+    fn from(product: product_v1::Product) -> Self {
+        Self {
+            id: product.id,
+            sku: product.sku,
+            name: product.name,
+            description: product.description,
+            unit: product.unit,
+            barcode: product.barcode,
+            category_id: product.category_id,
+            is_active: product.is_active,
+            created_at: product.created_at.as_ref().and_then(wms_proto::from_timestamp),
+            updated_at: product.updated_at.as_ref().and_then(wms_proto::from_timestamp),
+        }
+    }
+}
+
+#[derive(Serialize)]
+pub struct CategoryJson {
+    pub id: i64,
+    pub name: String,
+    pub created_at: Option<DateTime<Utc>>,
+    pub updated_at: Option<DateTime<Utc>>,
+}
+
+impl From<product_v1::Category> for CategoryJson {
+    fn from(category: product_v1::Category) -> Self {
+        Self {
+            id: category.id,
+            name: category.name,
+            created_at: category.created_at.as_ref().and_then(wms_proto::from_timestamp),
+            updated_at: category.updated_at.as_ref().and_then(wms_proto::from_timestamp),
         }
     }
 }

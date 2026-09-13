@@ -8,6 +8,7 @@ use std::sync::Arc;
 
 use tonic::transport::Endpoint;
 use wms_proto::user::v1::user_service_client::UserServiceClient;
+use wms_proto::product::v1::product_service_client::ProductServiceClient;
 use wms_proto::warehouse::v1::warehouse_service_client::WarehouseServiceClient;
 
 use config::GatewayConfig;
@@ -29,11 +30,15 @@ async fn main() -> anyhow::Result<()> {
         Endpoint::from_shared(config.warehouse_service_url.clone())?.connect_lazy();
     let warehouses = WarehouseServiceClient::new(warehouse_channel);
 
+    let product_channel = Endpoint::from_shared(config.product_service_url.clone())?.connect_lazy();
+    let products = ProductServiceClient::new(product_channel);
+
     let addr = format!("{}:{}", config.server_url, config.server_port);
 
     let state = AppState {
         users,
         warehouses,
+        products,
         config: Arc::new(config),
     };
 

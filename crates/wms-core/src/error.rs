@@ -20,9 +20,23 @@ impl From<sqlx::Error> for AppError {
     fn from(err: sqlx::Error) -> Self {
         match &err {
             sqlx::Error::RowNotFound => AppError::NotFound("resource not found".to_string()),
-            sqlx::Error::Database(db_err) if db_err.code().as_deref() == Some("23505") => {
-                AppError::Conflict("resource already exists".to_string())
-            }
+            // Postgres SQLSTATE codes. These are client mistakes, not server
+            // faults, so they must not fall through to a 500.
+            sqlx::Error::Database(db_err) => match db_err.code().as_deref() {
+                // unique_violation
+                Some("23505") => AppError::Conflict("resource already exists".to_string()),
+                // foreign_key_violation
+                Some("23503") => {
+                    AppError::Validation("referenced resource does not exist".to_string())
+                }
+                // check_violation
+                Some("23514") => {
+                    AppError::Validation("value violates a database constraint".to_string())
+                }
+                // not_null_violation
+                Some("23502") => AppError::Validation("a required field is missing".to_string()),
+                _ => AppError::Internal(anyhow::anyhow!(err)),
+            },
             _ => AppError::Internal(anyhow::anyhow!(err)),
         }
     }

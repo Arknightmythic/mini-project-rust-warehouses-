@@ -64,5 +64,41 @@ export default function () {
     const deleteWarehouseRes = http.del(`${BASE_URL}/api/warehouses/${warehouseId}`, null, authHeaders(token));
     check(deleteWarehouseRes, { 'delete warehouse status 200': (r) => r.status === 200 });
 
+    const categoriesRes = http.get(`${BASE_URL}/api/categories`, authHeaders(token));
+    check(categoriesRes, { 'list categories status 200': (r) => r.status === 200 });
+
+    const listProductsRes = http.get(`${BASE_URL}/api/products`, authHeaders(token));
+    check(listProductsRes, {
+        'list products status 200': (r) => r.status === 200,
+        'seeded products present': (r) => r.json().length >= 4,
+    });
+
+    const sku = `SKU-K6-${__VU}-${__ITER}-${Date.now()}`;
+    const createProductRes = http.post(
+        `${BASE_URL}/api/products`,
+        JSON.stringify({ sku: sku, name: 'K6 Product', unit: 'pcs' }),
+        authHeaders(token),
+    );
+    check(createProductRes, { 'create product status 200': (r) => r.status === 200 });
+
+    const productId = createProductRes.json('id');
+
+    const getProductRes = http.get(`${BASE_URL}/api/products/${productId}`, authHeaders(token));
+    check(getProductRes, {
+        'get product status 200': (r) => r.status === 200,
+        'product starts active': (r) => r.json('is_active') === true,
+    });
+
+    // Master data is deactivated, never deleted: other services hold this id and
+    // there is no foreign key across the boundary to protect them.
+    const deactivateRes = http.del(`${BASE_URL}/api/products/${productId}`, null, authHeaders(token));
+    check(deactivateRes, { 'deactivate product status 200': (r) => r.status === 200 });
+
+    const afterDeactivateRes = http.get(`${BASE_URL}/api/products/${productId}`, authHeaders(token));
+    check(afterDeactivateRes, {
+        'deactivated product still readable': (r) => r.status === 200,
+        'deactivated product is inactive': (r) => r.json('is_active') === false,
+    });
+
     sleep(1);
 }

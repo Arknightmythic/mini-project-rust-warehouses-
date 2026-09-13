@@ -1,0 +1,74 @@
+syntax = "proto3";
+
+package wms.product.v1;
+
+import "google/protobuf/empty.proto";
+import "google/protobuf/timestamp.proto";
+
+message Category {
+  int64 id = 1;
+  string name = 2;
+  google.protobuf.Timestamp created_at = 3;
+  google.protobuf.Timestamp updated_at = 4;
+}
+
+// The catalog never knows quantities. How much stock exists is inventory-service
+// business; this service only answers "what is this item".
+message Product {
+  int64 id = 1;
+  string sku = 2;
+  string name = 3;
+  optional string description = 4;
+  string unit = 5;
+  optional string barcode = 6;
+  optional int64 category_id = 7;
+  bool is_active = 8;
+  google.protobuf.Timestamp created_at = 9;
+  google.protobuf.Timestamp updated_at = 10;
+}
+
+message GetProductRequest { int64 id = 1; }
+
+// Purpose-built so validating a receipt with N lines costs one round trip
+// instead of N. Not consumed until inventory-service exists.
+message GetProductsByIdsRequest { repeated int64 ids = 1; }
+message GetProductsByIdsResponse { repeated Product products = 1; }
+
+message ListProductsRequest { bool include_inactive = 1; }
+message ListProductsResponse { repeated Product products = 1; }
+
+message CreateProductRequest {
+  string sku = 1;
+  string name = 2;
+  optional string description = 3;
+  optional string unit = 4;
+  optional string barcode = 5;
+  optional int64 category_id = 6;
+}
+
+message UpdateProductRequest {
+  int64 id = 1;
+  optional string name = 2;
+  optional string description = 3;
+  optional string unit = 4;
+  optional string barcode = 5;
+  optional int64 category_id = 6;
+}
+
+message DeactivateProductRequest { int64 id = 1; }
+
+message ListCategoriesRequest {}
+message ListCategoriesResponse { repeated Category categories = 1; }
+message CreateCategoryRequest { string name = 1; }
+
+service ProductService {
+  rpc GetProduct(GetProductRequest) returns (Product);
+  rpc GetProductsByIds(GetProductsByIdsRequest) returns (GetProductsByIdsResponse);
+  rpc ListProducts(ListProductsRequest) returns (ListProductsResponse);
+  rpc CreateProduct(CreateProductRequest) returns (Product);
+  rpc UpdateProduct(UpdateProductRequest) returns (Product);
+  rpc DeactivateProduct(DeactivateProductRequest) returns (google.protobuf.Empty);
+
+  rpc ListCategories(ListCategoriesRequest) returns (ListCategoriesResponse);
+  rpc CreateCategory(CreateCategoryRequest) returns (Category);
+}

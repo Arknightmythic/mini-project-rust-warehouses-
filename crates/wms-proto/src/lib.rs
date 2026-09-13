@@ -10,6 +10,12 @@ pub mod warehouse {
     }
 }
 
+pub mod product {
+    pub mod v1 {
+        include!("generated/wms.product.v1.rs");
+    }
+}
+
 use chrono::{DateTime, Utc};
 use prost_types::Timestamp;
 

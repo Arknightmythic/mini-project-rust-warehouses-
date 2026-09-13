@@ -35,6 +35,24 @@ services:
       timeout: 5s
       retries: 10
 
+  postgres-product:
+    image: postgres:17-alpine
+    container_name: postgres-product
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: lokal
+      POSTGRES_DB: warehouse_product_db
+    restart: unless-stopped
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_product_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
   user-service:
     build:
       context: .
@@ -78,6 +96,26 @@ services:
       timeout: 5s
       retries: 5
 
+  product-service:
+    build:
+      context: .
+      args:
+        SERVICE: product-service
+    environment:
+      GRPC_ADDR: 0.0.0.0:50053
+      DATABASE_URL: postgresql://postgres:lokal@postgres-product:5432/warehouse_product_db
+      DB_MAX_CONNECTIONS: 10
+    ports:
+      - "50053:50053"
+    depends_on:
+      postgres-product:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c '</dev/tcp/127.0.0.1/50053'"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   api-gateway:
     build:
       context: .
@@ -88,6 +126,7 @@ services:
       SERVER_PORT: 8080
       USER_SERVICE_URL: http://user-service:50051
       WAREHOUSE_SERVICE_URL: http://warehouse-service:50052
+      PRODUCT_SERVICE_URL: http://product-service:50053
       JWT_SECRET: secret
       JWT_ISSUER: secret
     ports:
@@ -100,6 +139,21 @@ services:
         condition: service_started
       warehouse-service:
         condition: service_started
+      product-service:
+        condition: service_started
+
+  product-seed:
+    build:
+      context: .
+      args:
+        SERVICE: product-service
+    entrypoint: ["/app/seed"]
+    environment:
+      DATABASE_URL: postgresql://postgres:lokal@postgres-product:5432/warehouse_product_db
+    depends_on:
+      postgres-product:
+        condition: service_healthy
+    profiles: ["tools"]
 
   user-seed:
     build:
@@ -117,3 +171,4 @@ services:
 volumes:
   postgres_user_data:
   postgres_warehouse_data:
+  postgres_product_data:

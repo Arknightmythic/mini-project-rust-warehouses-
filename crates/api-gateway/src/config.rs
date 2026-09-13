@@ -6,6 +6,7 @@ pub struct GatewayConfig {
     pub server_port: u16,
     pub user_service_url: String,
     pub warehouse_service_url: String,
+    pub product_service_url: String,
     pub jwt_secret: String,
     pub jwt_issuer: String,
 }
@@ -17,6 +18,7 @@ impl GatewayConfig {
             server_port: wms_core::config::env_parse_or("SERVER_PORT", 8080),
             user_service_url: env_var_or("USER_SERVICE_URL", "http://127.0.0.1:50051"),
             warehouse_service_url: env_var_or("WAREHOUSE_SERVICE_URL", "http://127.0.0.1:50052"),
+            product_service_url: env_var_or("PRODUCT_SERVICE_URL", "http://127.0.0.1:50053"),
             jwt_secret: env_var("JWT_SECRET"),
             jwt_issuer: env_var("JWT_ISSUER"),
         }

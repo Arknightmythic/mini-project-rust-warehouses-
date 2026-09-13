@@ -2,6 +2,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let protos = [
         "proto/user/v1/user.proto",
         "proto/warehouse/v1/warehouse.proto",
+        "proto/product/v1/product.proto",
     ];
 
     // Scope reruns to the .proto files only; the build script writes into src/,

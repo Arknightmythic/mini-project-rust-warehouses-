@@ -1,4 +1,5 @@
 pub mod auth_routes;
+pub mod product_routes;
 pub mod role_routes;
 pub mod user_routes;
 pub mod warehouse_routes;
@@ -18,6 +19,8 @@ pub fn build_router(state: AppState) -> Router {
         .nest("/api/users", user_routes::router())
         .nest("/api/roles", role_routes::router())
         .nest("/api/warehouses", warehouse_routes::router())
+        .nest("/api/products", product_routes::router())
+        .nest("/api/categories", product_routes::category_router())
         .layer(CorsLayer::permissive())
         .layer(TraceLayer::new_for_http())
         .with_state(state)

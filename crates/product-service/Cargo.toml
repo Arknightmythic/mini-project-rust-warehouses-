@@ -1,0 +1,25 @@
+[package]
+name = "product-service"
+version.workspace = true
+edition.workspace = true
+default-run = "product-service"
+autobins = false
+
+[[bin]]
+name = "product-service"
+path = "src/main.rs"
+
+[[bin]]
+name = "product-service-seed"
+path = "src/bin/seed.rs"
+
+[dependencies]
+wms-core = { workspace = true, features = ["grpc"] }
+wms-proto = { workspace = true }
+
+anyhow = { workspace = true }
+chrono = { workspace = true }
+sqlx = { workspace = true }
+tokio = { workspace = true }
+tonic = { workspace = true }
+tracing = { workspace = true }
