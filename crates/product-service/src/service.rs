@@ -115,6 +115,8 @@ fn to_proto_product(product: models::product::Product) -> Product {
         is_active: product.is_active,
         created_at: wms_proto::opt_timestamp(product.created_at),
         updated_at: wms_proto::opt_timestamp(product.updated_at),
+        total_stock_cached: product.total_stock_cached,
+        stock_synced_at: wms_proto::opt_timestamp(product.stock_synced_at),
     }
 }
 

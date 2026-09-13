@@ -36,13 +36,31 @@ async fn main() -> anyhow::Result<()> {
         inject,
     );
 
+    // Like the cache: a broker that cannot be reached must not stop the service
+    // from starting. Receipts still work; they just go unannounced.
+    let events = if config.amqp_url.is_empty() {
+        tracing::info!("no AMQP_URL set, running without event publishing");
+        None
+    } else {
+        match wms_events::EventPublisher::connect(&config.amqp_url).await {
+            Ok(publisher) => {
+                tracing::info!("event publisher connected");
+                Some(publisher)
+            }
+            Err(err) => {
+                tracing::warn!(error = %err, "broker unavailable, events will not be published");
+                None
+            }
+        }
+    };
+
     let addr = config.grpc_addr.parse()?;
 
     tracing::info!("inventory-service listening on {addr}");
     Server::builder()
         .layer(wms_core::grpc::trace_layer())
         .add_service(InventoryServiceServer::new(InventoryGrpcService::new(
-            pool, warehouses, products,
+            pool, warehouses, products, events,
         )))
         .serve(addr)
         .await?;

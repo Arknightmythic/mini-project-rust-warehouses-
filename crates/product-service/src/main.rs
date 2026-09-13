@@ -1,4 +1,5 @@
 mod config;
+mod consumer;
 mod models;
 mod repositories;
 mod service;
@@ -36,6 +37,35 @@ async fn main() -> anyhow::Result<()> {
             }
         }
     };
+
+    // The consumer runs alongside the gRPC server on its own task. If the broker
+    // is unreachable the server still starts: stock rollups simply stop updating,
+    // which is a degraded read model, not an outage.
+    if config.amqp_url.is_empty() {
+        tracing::info!("no AMQP_URL set, stock rollups will not be updated");
+    } else {
+        let rollup = consumer::StockRollupConsumer::new(pool.clone(), cache.clone());
+        let amqp_url = config.amqp_url.clone();
+
+        tokio::spawn(async move {
+            match wms_events::consumer::connect(&amqp_url).await {
+                Ok((_connection, channel)) => {
+                    let result = wms_events::consumer::consume(
+                        &channel,
+                        wms_events::topology::PRODUCT_QUEUE,
+                        "product-service",
+                        |envelope| rollup.handle(envelope),
+                    )
+                    .await;
+
+                    if let Err(err) = result {
+                        tracing::error!(error = ?err, "stock rollup consumer stopped");
+                    }
+                }
+                Err(err) => tracing::warn!(error = %err, "broker unavailable, no stock rollups"),
+            }
+        });
+    }
 
     let addr = config.grpc_addr.parse()?;
 

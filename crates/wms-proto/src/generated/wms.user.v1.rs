@@ -99,6 +99,11 @@ pub struct RemoveRoleRequest {
     #[prost(int64, tag = "2")]
     pub role_id: i64,
 }
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct ListUsersByRoleRequest {
+    #[prost(string, tag = "1")]
+    pub role: ::prost::alloc::string::String,
+}
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct ListRolesRequest {}
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -304,6 +309,32 @@ pub mod user_service_client {
             let mut req = request.into_request();
             req.extensions_mut()
                 .insert(GrpcMethod::new("wms.user.v1.UserService", "ListUsers"));
+            self.inner.unary(req, path, codec).await
+        }
+        /// Added after the service was already deployed. Adding an RPC is backward
+        /// compatible: existing clients neither know nor care that it exists.
+        pub async fn list_users_by_role(
+            &mut self,
+            request: impl tonic::IntoRequest<super::ListUsersByRoleRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::ListUsersResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::unknown(
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic_prost::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/wms.user.v1.UserService/ListUsersByRole",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(GrpcMethod::new("wms.user.v1.UserService", "ListUsersByRole"));
             self.inner.unary(req, path, codec).await
         }
         pub async fn update_user(
@@ -552,6 +583,15 @@ pub mod user_service_server {
         async fn list_users(
             &self,
             request: tonic::Request<super::ListUsersRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::ListUsersResponse>,
+            tonic::Status,
+        >;
+        /// Added after the service was already deployed. Adding an RPC is backward
+        /// compatible: existing clients neither know nor care that it exists.
+        async fn list_users_by_role(
+            &self,
+            request: tonic::Request<super::ListUsersByRoleRequest>,
         ) -> std::result::Result<
             tonic::Response<super::ListUsersResponse>,
             tonic::Status,
@@ -842,6 +882,52 @@ pub mod user_service_server {
                     let inner = self.inner.clone();
                     let fut = async move {
                         let method = ListUsersSvc(inner);
+                        let codec = tonic_prost::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/wms.user.v1.UserService/ListUsersByRole" => {
+                    #[allow(non_camel_case_types)]
+                    struct ListUsersByRoleSvc<T: UserService>(pub Arc<T>);
+                    impl<
+                        T: UserService,
+                    > tonic::server::UnaryService<super::ListUsersByRoleRequest>
+                    for ListUsersByRoleSvc<T> {
+                        type Response = super::ListUsersResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::ListUsersByRoleRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as UserService>::list_users_by_role(&inner, request)
+                                    .await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let method = ListUsersByRoleSvc(inner);
                         let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(

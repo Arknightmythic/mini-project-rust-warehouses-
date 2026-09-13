@@ -25,6 +25,10 @@ message Product {
   bool is_active = 8;
   google.protobuf.Timestamp created_at = 9;
   google.protobuf.Timestamp updated_at = 10;
+  // Denormalised read model, maintained by consuming inventory events. May lag.
+  // inventory-service remains the only authority on actual quantities.
+  int64 total_stock_cached = 11;
+  google.protobuf.Timestamp stock_synced_at = 12;
 }
 
 message GetProductRequest { int64 id = 1; }

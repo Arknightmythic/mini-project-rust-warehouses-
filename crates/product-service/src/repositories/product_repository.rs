@@ -100,3 +100,24 @@ pub async fn deactivate(pool: &PgPool, id: i64) -> Result<u64, AppError> {
 
     Ok(result.rows_affected())
 }
+
+// Race-safe by construction, same rule as the stock balances themselves: the
+// read and the write are one statement, never a SELECT followed by an UPDATE.
+pub async fn add_to_stock_rollup(
+    pool: &PgPool,
+    product_id: i64,
+    quantity: i64,
+) -> Result<u64, AppError> {
+    let result = sqlx::query(
+        "UPDATE public.products
+            SET total_stock_cached = total_stock_cached + $2,
+                stock_synced_at = CURRENT_TIMESTAMP
+          WHERE id = $1",
+    )
+    .bind(product_id)
+    .bind(quantity)
+    .execute(pool)
+    .await?;
+
+    Ok(result.rows_affected())
+}

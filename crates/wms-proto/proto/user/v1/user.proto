@@ -56,6 +56,8 @@ message ListUserRolesRequest { int64 user_id = 1; }
 message AssignRoleRequest { int64 user_id = 1; int64 role_id = 2; }
 message RemoveRoleRequest { int64 user_id = 1; int64 role_id = 2; }
 
+message ListUsersByRoleRequest { string role = 1; }
+
 message ListRolesRequest {}
 message ListRolesResponse { repeated Role roles = 1; }
 message GetRoleRequest { int64 id = 1; }
@@ -69,6 +71,9 @@ service UserService {
 
   rpc GetUser(GetUserRequest) returns (User);
   rpc ListUsers(ListUsersRequest) returns (ListUsersResponse);
+  // Added after the service was already deployed. Adding an RPC is backward
+  // compatible: existing clients neither know nor care that it exists.
+  rpc ListUsersByRole(ListUsersByRoleRequest) returns (ListUsersResponse);
   rpc UpdateUser(UpdateUserRequest) returns (User);
   rpc DeleteUser(DeleteUserRequest) returns (google.protobuf.Empty);
 

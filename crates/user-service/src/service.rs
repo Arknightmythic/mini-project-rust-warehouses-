@@ -7,7 +7,7 @@ use wms_proto::user::v1::user_service_server::UserService;
 use wms_proto::user::v1::{
     AssignRoleRequest, CreateRoleRequest, DeleteRoleRequest, DeleteUserRequest, GetRoleRequest,
     GetUserRequest, ListRolesRequest, ListRolesResponse, ListUserRolesRequest, ListUsersRequest,
-    ListUsersResponse, LoginRequest, LoginResponse, RegisterRequest, RemoveRoleRequest, Role,
+    ListUsersByRoleRequest, ListUsersResponse, LoginRequest, LoginResponse, RegisterRequest, RemoveRoleRequest, Role,
     UpdateRoleRequest, UpdateUserRequest, User,
 };
 
@@ -118,6 +118,18 @@ impl UserService for UserGrpcService {
         _request: Request<ListUsersRequest>,
     ) -> Result<Response<ListUsersResponse>, Status> {
         let users = user_repository::list(&self.pool).await?;
+
+        Ok(Response::new(ListUsersResponse {
+            users: users.into_iter().map(to_proto_user).collect(),
+        }))
+    }
+
+    #[tracing::instrument(skip_all)]
+    async fn list_users_by_role(
+        &self,
+        request: Request<ListUsersByRoleRequest>,
+    ) -> Result<Response<ListUsersResponse>, Status> {
+        let users = user_repository::list_by_role(&self.pool, &request.into_inner().role).await?;
 
         Ok(Response::new(ListUsersResponse {
             users: users.into_iter().map(to_proto_user).collect(),

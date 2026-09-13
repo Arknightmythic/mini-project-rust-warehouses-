@@ -93,3 +93,16 @@ pub async fn list_role_names(pool: &PgPool, user_id: i64) -> Result<Vec<String>,
 
     Ok(rows.into_iter().map(|(name,)| name).collect())
 }
+
+pub async fn list_by_role(pool: &PgPool, role: &str) -> Result<Vec<User>, AppError> {
+    Ok(sqlx::query_as::<_, User>(
+        "SELECT u.* FROM public.users u
+         JOIN public.user_roles ur ON ur.user_id = u.id
+         JOIN public.roles r ON r.id = ur.role_id
+         WHERE r.name = $1
+         ORDER BY u.id",
+    )
+    .bind(role)
+    .fetch_all(pool)
+    .await?)
+}

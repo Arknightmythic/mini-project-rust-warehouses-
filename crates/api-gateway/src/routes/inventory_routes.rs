@@ -6,7 +6,9 @@ use tonic::Request;
 use wms_core::{AppError, AppResult};
 use wms_proto::inventory::v1 as inventory_v1;
 
-use crate::dto::{ReceiptJson, StockBalanceJson, StockMovementJson};
+use wms_proto::product::v1 as product_v1;
+
+use crate::dto::{ReceiptJson, StockBalanceJson, StockMovementJson, StockReportRowJson};
 use crate::middlewares::AuthUser;
 use crate::state::AppState;
 
@@ -16,6 +18,7 @@ pub fn router() -> Router<AppState> {
         .route("/balances", get(list_balances))
         .route("/balances/{warehouse_id}/{product_id}", get(get_balance))
         .route("/movements", get(list_movements))
+        .route("/report", get(stock_report))
 }
 
 #[derive(Deserialize)]
@@ -141,4 +144,61 @@ async fn list_movements(
     Ok(Json(
         movements.into_iter().map(StockMovementJson::from).collect(),
     ))
+}
+
+// Two calls, deliberately: one to the owner of quantities, one to the owner of
+// names, then a join in memory. The batch RPC keeps it at two round trips no
+// matter how many rows come back.
+async fn stock_report(
+    _auth: AuthUser,
+    State(state): State<AppState>,
+    Query(query): Query<BalanceQuery>,
+) -> AppResult<Json<Vec<StockReportRowJson>>> {
+    let mut inventory = state.inventory.clone();
+
+    let balances = inventory
+        .list_stock_balances(Request::new(inventory_v1::ListStockBalancesRequest {
+            warehouse_id: query.warehouse_id,
+        }))
+        .await
+        .map_err(AppError::from)?
+        .into_inner()
+        .balances;
+
+    let mut product_ids: Vec<i64> = balances.iter().map(|b| b.product_id).collect();
+    product_ids.sort_unstable();
+    product_ids.dedup();
+
+    let mut products = state.products.clone();
+    let catalog = products
+        .get_products_by_ids(Request::new(product_v1::GetProductsByIdsRequest {
+            ids: product_ids,
+        }))
+        .await
+        .map_err(AppError::from)?
+        .into_inner()
+        .products;
+
+    let rows = balances
+        .into_iter()
+        .map(|balance| {
+            let product = catalog.iter().find(|p| p.id == balance.product_id);
+
+            StockReportRowJson {
+                warehouse_id: balance.warehouse_id,
+                product_id: balance.product_id,
+                // None when the catalog has no such product. Without foreign keys
+                // across services this is a real state, so the API admits it
+                // instead of inventing a name.
+                sku: product.map(|p| p.sku.clone()),
+                product_name: product.map(|p| p.name.clone()),
+                unit: product.map(|p| p.unit.clone()),
+                qty_on_hand: balance.qty_on_hand,
+                qty_reserved: balance.qty_reserved,
+                qty_available: balance.qty_available,
+            }
+        })
+        .collect();
+
+    Ok(Json(rows))
 }

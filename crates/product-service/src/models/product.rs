@@ -15,4 +15,6 @@ pub struct Product {
     pub is_active: bool,
     pub created_at: Option<DateTime<Utc>>,
     pub updated_at: Option<DateTime<Utc>>,
+    pub total_stock_cached: i64,
+    pub stock_synced_at: Option<DateTime<Utc>>,
 }

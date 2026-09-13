@@ -34,6 +34,12 @@ pub struct Product {
     pub created_at: ::core::option::Option<::prost_types::Timestamp>,
     #[prost(message, optional, tag = "10")]
     pub updated_at: ::core::option::Option<::prost_types::Timestamp>,
+    /// Denormalised read model, maintained by consuming inventory events. May lag.
+    /// inventory-service remains the only authority on actual quantities.
+    #[prost(int64, tag = "11")]
+    pub total_stock_cached: i64,
+    #[prost(message, optional, tag = "12")]
+    pub stock_synced_at: ::core::option::Option<::prost_types::Timestamp>,
 }
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct GetProductRequest {

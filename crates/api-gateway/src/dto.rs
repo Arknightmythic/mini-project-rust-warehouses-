@@ -83,6 +83,24 @@ impl From<warehouse_v1::Warehouse> for WarehouseJson {
     }
 }
 
+// Stock balances joined with product names. The join happens HERE, in the gateway,
+// because neither service may reach into the other's database and neither should
+// grow a read-path dependency on the other just to render a list.
+//
+// The rule this endpoint demonstrates: reads compose at the gateway, writes
+// validate at the owner.
+#[derive(Serialize)]
+pub struct StockReportRowJson {
+    pub warehouse_id: i64,
+    pub product_id: i64,
+    pub sku: Option<String>,
+    pub product_name: Option<String>,
+    pub unit: Option<String>,
+    pub qty_on_hand: i64,
+    pub qty_reserved: i64,
+    pub qty_available: i64,
+}
+
 #[derive(Serialize)]
 pub struct ProductJson {
     pub id: i64,
@@ -95,6 +113,10 @@ pub struct ProductJson {
     pub is_active: bool,
     pub created_at: Option<DateTime<Utc>>,
     pub updated_at: Option<DateTime<Utc>>,
+    // Read model owned by inventory-service, copied here by events. Shown with an
+    // explicit sync timestamp so a stale value is visible rather than misleading.
+    pub total_stock_cached: i64,
+    pub stock_synced_at: Option<DateTime<Utc>>,
 }
 
 impl From<product_v1::Product> for ProductJson {
@@ -110,6 +132,8 @@ impl From<product_v1::Product> for ProductJson {
             is_active: product.is_active,
             created_at: product.created_at.as_ref().and_then(wms_proto::from_timestamp),
             updated_at: product.updated_at.as_ref().and_then(wms_proto::from_timestamp),
+            total_stock_cached: product.total_stock_cached,
+            stock_synced_at: product.stock_synced_at.as_ref().and_then(wms_proto::from_timestamp),
         }
     }
 }

@@ -2,6 +2,7 @@ use sqlx::PgPool;
 use wms_core::grpc::TracedChannel;
 use tonic::{Request, Response, Status};
 use wms_core::AppError;
+use wms_events::{Envelope, EventPublisher, ReceivedLine, StockReceived};
 use wms_proto::inventory::v1::inventory_service_server::InventoryService;
 use wms_proto::inventory::v1::{
     GetStockBalanceRequest, ListStockBalancesRequest, ListStockBalancesResponse,
@@ -24,6 +25,7 @@ pub struct InventoryGrpcService {
     pool: PgPool,
     warehouses: WarehouseServiceClient<TracedChannel>,
     products: ProductServiceClient<TracedChannel>,
+    events: Option<EventPublisher>,
 }
 
 impl InventoryGrpcService {
@@ -31,11 +33,13 @@ impl InventoryGrpcService {
         pool: PgPool,
         warehouses: WarehouseServiceClient<TracedChannel>,
         products: ProductServiceClient<TracedChannel>,
+        events: Option<EventPublisher>,
     ) -> Self {
         Self {
             pool,
             warehouses,
             products,
+            events,
         }
     }
 
@@ -199,6 +203,40 @@ impl InventoryService for InventoryGrpcService {
             by = identity.user_id,
             "stock received"
         );
+
+        // KNOWN BUG, LEFT IN DELIBERATELY: this publishes AFTER the transaction
+        // committed. If the process dies between COMMIT and this line, the stock
+        // exists but nobody is ever told - the dual-write problem. The fix is a
+        // transactional outbox, and it lands in a later phase on purpose: watching
+        // your own code lose an event teaches it far better than reading about it.
+        //
+        // Note also that a publish failure does NOT fail the request. The stock is
+        // genuinely received; refusing the caller now would be a lie.
+        if let Some(publisher) = &self.events {
+            let event = Envelope::new(
+                "inventory.stock.received",
+                StockReceived {
+                    receipt_id: receipt.id,
+                    warehouse_id: receipt.warehouse_id,
+                    reference_no: receipt.reference_no.clone(),
+                    received_by: identity.user_id,
+                    lines: items
+                        .iter()
+                        .map(|item| ReceivedLine {
+                            product_id: item.product_id,
+                            quantity: item.quantity,
+                        })
+                        .collect(),
+                },
+            );
+
+            if let Err(err) = publisher
+                .publish(wms_events::topology::ROUTING_STOCK_RECEIVED, event)
+                .await
+            {
+                tracing::error!(error = ?err, receipt_id = receipt.id, "failed to publish StockReceived");
+            }
+        }
 
         Ok(Response::new(ReceiveStockResponse {
             receipt_id: receipt.id,
