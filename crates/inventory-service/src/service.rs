@@ -21,6 +21,10 @@ const RECEIVER_ROLES: [&str; 3] = ["admin", "warehouse_manager", "staff"];
 
 // Only Clone + Send + Sync values live here. tonic channels are cheap to clone
 // and multiplex over a single HTTP/2 connection.
+// Clone, not Arc: every field is already a cheap handle (PgPool and tonic
+// channels are Arc inside), so the sweeper takes its own copy instead of forcing
+// the gRPC server to accept an Arc it cannot use.
+#[derive(Clone)]
 pub struct InventoryGrpcService {
     pool: PgPool,
     warehouses: WarehouseServiceClient<TracedChannel>,
@@ -43,7 +47,29 @@ impl InventoryGrpcService {
         }
     }
 
-    async fn assert_warehouse_exists(&self, warehouse_id: i64) -> Result<(), AppError> {
+    pub(crate) fn pool(&self) -> &PgPool {
+        &self.pool
+    }
+
+    pub(crate) fn products(&self) -> ProductServiceClient<TracedChannel> {
+        self.products.clone()
+    }
+
+    // Publishing is best effort everywhere in this service: the fact already
+    // happened in the database, so a broker problem must not undo it.
+    pub(crate) async fn publish<T: serde::Serialize>(
+        &self,
+        routing_key: &str,
+        envelope: wms_events::Envelope<T>,
+    ) {
+        if let Some(publisher) = &self.events {
+            if let Err(err) = publisher.publish(routing_key, envelope).await {
+                tracing::error!(error = ?err, routing_key, "failed to publish event");
+            }
+        }
+    }
+
+    pub(crate) async fn assert_warehouse_exists(&self, warehouse_id: i64) -> Result<(), AppError> {
         let mut client = self.warehouses.clone();
 
         let response = client
@@ -63,7 +89,7 @@ impl InventoryGrpcService {
         }
     }
 
-    // Was one round trip per line item. Jaeger showed the ladder of sequential
+    pub(crate) // Was one round trip per line item. Jaeger showed the ladder of sequential
     // get_product spans, so it is now a single batch call: N network hops become 1.
     async fn assert_products_exist(&self, product_ids: &[i64]) -> Result<(), AppError> {
         let mut client = self.products.clone();
@@ -246,6 +272,46 @@ impl InventoryService for InventoryGrpcService {
             created_at: wms_proto::opt_timestamp(receipt.created_at),
             idempotent_replay: false,
         }))
+    }
+
+    #[tracing::instrument(skip_all)]
+    async fn ship_stock(
+        &self,
+        request: Request<wms_proto::inventory::v1::ShipStockRequest>,
+    ) -> Result<Response<wms_proto::inventory::v1::Shipment>, Status> {
+        self.saga_ship_stock(request).await
+    }
+
+    #[tracing::instrument(skip_all)]
+    async fn confirm_shipment(
+        &self,
+        request: Request<wms_proto::inventory::v1::ConfirmShipmentRequest>,
+    ) -> Result<Response<wms_proto::inventory::v1::Shipment>, Status> {
+        self.saga_confirm_shipment(request).await
+    }
+
+    #[tracing::instrument(skip_all)]
+    async fn cancel_shipment(
+        &self,
+        request: Request<wms_proto::inventory::v1::CancelShipmentRequest>,
+    ) -> Result<Response<wms_proto::inventory::v1::Shipment>, Status> {
+        self.saga_cancel_shipment(request).await
+    }
+
+    #[tracing::instrument(skip_all)]
+    async fn get_shipment(
+        &self,
+        request: Request<wms_proto::inventory::v1::GetShipmentRequest>,
+    ) -> Result<Response<wms_proto::inventory::v1::Shipment>, Status> {
+        self.saga_get_shipment(request).await
+    }
+
+    #[tracing::instrument(skip_all)]
+    async fn list_shipments(
+        &self,
+        request: Request<wms_proto::inventory::v1::ListShipmentsRequest>,
+    ) -> Result<Response<wms_proto::inventory::v1::ListShipmentsResponse>, Status> {
+        self.saga_list_shipments(request).await
     }
 
     #[tracing::instrument(skip_all)]

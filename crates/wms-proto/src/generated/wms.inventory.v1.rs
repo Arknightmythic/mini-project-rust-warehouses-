@@ -100,6 +100,70 @@ pub struct ListStockMovementsResponse {
     #[prost(message, repeated, tag = "1")]
     pub movements: ::prost::alloc::vec::Vec<StockMovement>,
 }
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct ShipmentItem {
+    #[prost(int64, tag = "1")]
+    pub product_id: i64,
+    #[prost(int64, tag = "2")]
+    pub quantity: i64,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct Shipment {
+    #[prost(int64, tag = "1")]
+    pub id: i64,
+    #[prost(int64, tag = "2")]
+    pub warehouse_id: i64,
+    #[prost(string, optional, tag = "3")]
+    pub reference_no: ::core::option::Option<::prost::alloc::string::String>,
+    /// RESERVED -> SHIPPED, or RESERVED -> CANCELLED. The intermediate state is part
+    /// of the contract because it is part of reality.
+    #[prost(string, tag = "4")]
+    pub status: ::prost::alloc::string::String,
+    #[prost(message, repeated, tag = "5")]
+    pub items: ::prost::alloc::vec::Vec<ShipmentItem>,
+    #[prost(message, optional, tag = "6")]
+    pub created_at: ::core::option::Option<::prost_types::Timestamp>,
+    #[prost(message, optional, tag = "7")]
+    pub updated_at: ::core::option::Option<::prost_types::Timestamp>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ShipStockRequest {
+    #[prost(int64, tag = "1")]
+    pub warehouse_id: i64,
+    #[prost(string, optional, tag = "2")]
+    pub reference_no: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(message, repeated, tag = "3")]
+    pub items: ::prost::alloc::vec::Vec<ShipmentItem>,
+    #[prost(string, tag = "4")]
+    pub idempotency_key: ::prost::alloc::string::String,
+}
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct ConfirmShipmentRequest {
+    #[prost(int64, tag = "1")]
+    pub shipment_id: i64,
+}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct CancelShipmentRequest {
+    #[prost(int64, tag = "1")]
+    pub shipment_id: i64,
+    #[prost(string, optional, tag = "2")]
+    pub reason: ::core::option::Option<::prost::alloc::string::String>,
+}
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct GetShipmentRequest {
+    #[prost(int64, tag = "1")]
+    pub shipment_id: i64,
+}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct ListShipmentsRequest {
+    #[prost(string, optional, tag = "1")]
+    pub status: ::core::option::Option<::prost::alloc::string::String>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ListShipmentsResponse {
+    #[prost(message, repeated, tag = "1")]
+    pub shipments: ::prost::alloc::vec::Vec<Shipment>,
+}
 /// Generated client implementations.
 pub mod inventory_service_client {
     #![allow(
@@ -190,6 +254,133 @@ pub mod inventory_service_client {
         pub fn max_encoding_message_size(mut self, limit: usize) -> Self {
             self.inner = self.inner.max_encoding_message_size(limit);
             self
+        }
+        /// Step 1 of the saga: reserve. Does not move stock, only sets it aside.
+        pub async fn ship_stock(
+            &mut self,
+            request: impl tonic::IntoRequest<super::ShipStockRequest>,
+        ) -> std::result::Result<tonic::Response<super::Shipment>, tonic::Status> {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::unknown(
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic_prost::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/wms.inventory.v1.InventoryService/ShipStock",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(
+                    GrpcMethod::new("wms.inventory.v1.InventoryService", "ShipStock"),
+                );
+            self.inner.unary(req, path, codec).await
+        }
+        /// Step 2: commit. Validates against product-service, then stock actually leaves.
+        pub async fn confirm_shipment(
+            &mut self,
+            request: impl tonic::IntoRequest<super::ConfirmShipmentRequest>,
+        ) -> std::result::Result<tonic::Response<super::Shipment>, tonic::Status> {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::unknown(
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic_prost::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/wms.inventory.v1.InventoryService/ConfirmShipment",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(
+                    GrpcMethod::new(
+                        "wms.inventory.v1.InventoryService",
+                        "ConfirmShipment",
+                    ),
+                );
+            self.inner.unary(req, path, codec).await
+        }
+        /// Step 3: compensate. Not a rollback - another forward write that releases it.
+        pub async fn cancel_shipment(
+            &mut self,
+            request: impl tonic::IntoRequest<super::CancelShipmentRequest>,
+        ) -> std::result::Result<tonic::Response<super::Shipment>, tonic::Status> {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::unknown(
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic_prost::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/wms.inventory.v1.InventoryService/CancelShipment",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(
+                    GrpcMethod::new(
+                        "wms.inventory.v1.InventoryService",
+                        "CancelShipment",
+                    ),
+                );
+            self.inner.unary(req, path, codec).await
+        }
+        pub async fn get_shipment(
+            &mut self,
+            request: impl tonic::IntoRequest<super::GetShipmentRequest>,
+        ) -> std::result::Result<tonic::Response<super::Shipment>, tonic::Status> {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::unknown(
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic_prost::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/wms.inventory.v1.InventoryService/GetShipment",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(
+                    GrpcMethod::new("wms.inventory.v1.InventoryService", "GetShipment"),
+                );
+            self.inner.unary(req, path, codec).await
+        }
+        pub async fn list_shipments(
+            &mut self,
+            request: impl tonic::IntoRequest<super::ListShipmentsRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::ListShipmentsResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::unknown(
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic_prost::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/wms.inventory.v1.InventoryService/ListShipments",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(
+                    GrpcMethod::new("wms.inventory.v1.InventoryService", "ListShipments"),
+                );
+            self.inner.unary(req, path, codec).await
         }
         pub async fn receive_stock(
             &mut self,
@@ -316,6 +507,32 @@ pub mod inventory_service_server {
     /// Generated trait containing gRPC methods that should be implemented for use with InventoryServiceServer.
     #[async_trait]
     pub trait InventoryService: std::marker::Send + std::marker::Sync + 'static {
+        /// Step 1 of the saga: reserve. Does not move stock, only sets it aside.
+        async fn ship_stock(
+            &self,
+            request: tonic::Request<super::ShipStockRequest>,
+        ) -> std::result::Result<tonic::Response<super::Shipment>, tonic::Status>;
+        /// Step 2: commit. Validates against product-service, then stock actually leaves.
+        async fn confirm_shipment(
+            &self,
+            request: tonic::Request<super::ConfirmShipmentRequest>,
+        ) -> std::result::Result<tonic::Response<super::Shipment>, tonic::Status>;
+        /// Step 3: compensate. Not a rollback - another forward write that releases it.
+        async fn cancel_shipment(
+            &self,
+            request: tonic::Request<super::CancelShipmentRequest>,
+        ) -> std::result::Result<tonic::Response<super::Shipment>, tonic::Status>;
+        async fn get_shipment(
+            &self,
+            request: tonic::Request<super::GetShipmentRequest>,
+        ) -> std::result::Result<tonic::Response<super::Shipment>, tonic::Status>;
+        async fn list_shipments(
+            &self,
+            request: tonic::Request<super::ListShipmentsRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::ListShipmentsResponse>,
+            tonic::Status,
+        >;
         async fn receive_stock(
             &self,
             request: tonic::Request<super::ReceiveStockRequest>,
@@ -418,6 +635,234 @@ pub mod inventory_service_server {
         }
         fn call(&mut self, req: http::Request<B>) -> Self::Future {
             match req.uri().path() {
+                "/wms.inventory.v1.InventoryService/ShipStock" => {
+                    #[allow(non_camel_case_types)]
+                    struct ShipStockSvc<T: InventoryService>(pub Arc<T>);
+                    impl<
+                        T: InventoryService,
+                    > tonic::server::UnaryService<super::ShipStockRequest>
+                    for ShipStockSvc<T> {
+                        type Response = super::Shipment;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::ShipStockRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as InventoryService>::ship_stock(&inner, request).await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let method = ShipStockSvc(inner);
+                        let codec = tonic_prost::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/wms.inventory.v1.InventoryService/ConfirmShipment" => {
+                    #[allow(non_camel_case_types)]
+                    struct ConfirmShipmentSvc<T: InventoryService>(pub Arc<T>);
+                    impl<
+                        T: InventoryService,
+                    > tonic::server::UnaryService<super::ConfirmShipmentRequest>
+                    for ConfirmShipmentSvc<T> {
+                        type Response = super::Shipment;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::ConfirmShipmentRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as InventoryService>::confirm_shipment(&inner, request)
+                                    .await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let method = ConfirmShipmentSvc(inner);
+                        let codec = tonic_prost::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/wms.inventory.v1.InventoryService/CancelShipment" => {
+                    #[allow(non_camel_case_types)]
+                    struct CancelShipmentSvc<T: InventoryService>(pub Arc<T>);
+                    impl<
+                        T: InventoryService,
+                    > tonic::server::UnaryService<super::CancelShipmentRequest>
+                    for CancelShipmentSvc<T> {
+                        type Response = super::Shipment;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::CancelShipmentRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as InventoryService>::cancel_shipment(&inner, request)
+                                    .await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let method = CancelShipmentSvc(inner);
+                        let codec = tonic_prost::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/wms.inventory.v1.InventoryService/GetShipment" => {
+                    #[allow(non_camel_case_types)]
+                    struct GetShipmentSvc<T: InventoryService>(pub Arc<T>);
+                    impl<
+                        T: InventoryService,
+                    > tonic::server::UnaryService<super::GetShipmentRequest>
+                    for GetShipmentSvc<T> {
+                        type Response = super::Shipment;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::GetShipmentRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as InventoryService>::get_shipment(&inner, request).await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let method = GetShipmentSvc(inner);
+                        let codec = tonic_prost::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/wms.inventory.v1.InventoryService/ListShipments" => {
+                    #[allow(non_camel_case_types)]
+                    struct ListShipmentsSvc<T: InventoryService>(pub Arc<T>);
+                    impl<
+                        T: InventoryService,
+                    > tonic::server::UnaryService<super::ListShipmentsRequest>
+                    for ListShipmentsSvc<T> {
+                        type Response = super::ListShipmentsResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::ListShipmentsRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as InventoryService>::list_shipments(&inner, request)
+                                    .await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let method = ListShipmentsSvc(inner);
+                        let codec = tonic_prost::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
                 "/wms.inventory.v1.InventoryService/ReceiveStock" => {
                     #[allow(non_camel_case_types)]
                     struct ReceiveStockSvc<T: InventoryService>(pub Arc<T>);

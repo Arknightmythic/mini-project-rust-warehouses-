@@ -2,6 +2,8 @@ use sqlx::PgPool;
 use wms_core::cache::Cache;
 use wms_events::{Envelope, StockReceived};
 
+const STOCK_RECEIVED: &str = "inventory.stock.received";
+
 use crate::repositories::product_repository;
 
 // product-service is both a gRPC server AND an event consumer. Being event-driven
@@ -17,8 +19,17 @@ impl StockRollupConsumer {
         Self { pool, cache }
     }
 
-    pub async fn handle(&self, envelope: Envelope<StockReceived>) -> anyhow::Result<()> {
-        for line in &envelope.payload.lines {
+    pub async fn handle(&self, envelope: Envelope<serde_json::Value>) -> anyhow::Result<()> {
+        // Shipments move stock too, but this rollup only tracks receipts for now.
+        // Ignoring the rest is a decision, not an oversight.
+        if envelope.event_type != STOCK_RECEIVED {
+            tracing::debug!(event_type = %envelope.event_type, "event type not handled, skipping");
+            return Ok(());
+        }
+
+        let payload: StockReceived = envelope.payload_as()?;
+
+        for line in &payload.lines {
             let updated =
                 product_repository::add_to_stock_rollup(&self.pool, line.product_id, line.quantity)
                     .await?;
@@ -44,8 +55,8 @@ impl StockRollupConsumer {
 
         tracing::info!(
             event_id = %envelope.event_id,
-            receipt_id = envelope.payload.receipt_id,
-            lines = envelope.payload.lines.len(),
+            receipt_id = payload.receipt_id,
+            lines = payload.lines.len(),
             "stock rollup updated"
         );
 

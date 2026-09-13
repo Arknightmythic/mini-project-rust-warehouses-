@@ -5,7 +5,20 @@ use lapin::{Channel, ExchangeKind};
 pub const EXCHANGE: &str = "wms.events";
 pub const DEAD_LETTER_EXCHANGE: &str = "wms.events.dlx";
 
+// Catches messages the topic exchange could not route anywhere. Without it, a
+// message with no matching binding is discarded silently: no error, no log, no
+// dead letter. Learned the hard way after an accidental unbind lost 23 events
+// while every publish still reported success.
+//
+// Note the DLX and this are NOT the same thing. The DLX catches messages that
+// reached a queue and failed; this catches messages that never reached one.
+pub const UNROUTABLE_EXCHANGE: &str = "wms.events.unroutable";
+pub const UNROUTABLE_QUEUE: &str = "wms.events.unroutable";
+
 pub const ROUTING_STOCK_RECEIVED: &str = "inventory.stock.received";
+pub const ROUTING_STOCK_RESERVED: &str = "inventory.stock.reserved";
+pub const ROUTING_STOCK_SHIPPED: &str = "inventory.stock.shipped";
+pub const ROUTING_STOCK_RELEASED: &str = "inventory.stock.released";
 
 pub const NOTIFICATION_QUEUE: &str = "notification.stock-events";
 pub const NOTIFICATION_DLQ: &str = "notification.stock-events.dlq";
@@ -22,6 +35,47 @@ pub const STOCK_BINDING: &str = "inventory.stock.#";
 // Declaring is idempotent in AMQP, so every process can safely declare what it
 // needs at startup rather than relying on someone having set the broker up by hand.
 pub async fn declare(channel: &Channel) -> anyhow::Result<()> {
+    // Declared first so the main exchange can point at it.
+    channel
+        .exchange_declare(
+            UNROUTABLE_EXCHANGE.into(),
+            ExchangeKind::Fanout,
+            ExchangeDeclareOptions {
+                durable: true,
+                ..ExchangeDeclareOptions::default()
+            },
+            FieldTable::default(),
+        )
+        .await?;
+
+    channel
+        .queue_declare(
+            UNROUTABLE_QUEUE.into(),
+            QueueDeclareOptions::durable(),
+            FieldTable::default(),
+        )
+        .await?;
+
+    channel
+        .queue_bind(
+            UNROUTABLE_QUEUE.into(),
+            UNROUTABLE_EXCHANGE.into(),
+            "".into(),
+            QueueBindOptions::default(),
+            FieldTable::default(),
+        )
+        .await?;
+
+    let mut exchange_args = FieldTable::default();
+    exchange_args.insert(
+        "alternate-exchange".into(),
+        AMQPValue::LongString(UNROUTABLE_EXCHANGE.into()),
+    );
+
+    // CAREFUL: adding an argument to an exchange that already exists is refused
+    // with PRECONDITION_FAILED. Exchange arguments are part of its identity, so
+    // changing them means deleting and recreating it - a real migration, not a
+    // config tweak.
     channel
         .exchange_declare(
             EXCHANGE.into(),
@@ -30,7 +84,7 @@ pub async fn declare(channel: &Channel) -> anyhow::Result<()> {
                 durable: true,
                 ..ExchangeDeclareOptions::default()
             },
-            FieldTable::default(),
+            exchange_args,
         )
         .await?;
 

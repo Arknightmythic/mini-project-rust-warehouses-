@@ -1,6 +1,8 @@
 mod config;
 mod models;
 mod repositories;
+mod saga;
+mod sweeper;
 mod service;
 
 use tonic::transport::{Endpoint, Server};
@@ -56,12 +58,22 @@ async fn main() -> anyhow::Result<()> {
 
     let addr = config.grpc_addr.parse()?;
 
-    tracing::info!("inventory-service listening on {addr}");
+    let service = InventoryGrpcService::new(pool, warehouses, products, events);
+
+    sweeper::spawn(
+        service.clone(),
+        config.sweeper_interval_secs,
+        config.reservation_timeout_secs,
+    );
+
+    tracing::info!(
+        sweep_every = config.sweeper_interval_secs,
+        expire_after = config.reservation_timeout_secs,
+        "inventory-service listening on {addr}"
+    );
     Server::builder()
         .layer(wms_core::grpc::trace_layer())
-        .add_service(InventoryServiceServer::new(InventoryGrpcService::new(
-            pool, warehouses, products, events,
-        )))
+        .add_service(InventoryServiceServer::new(service))
         .serve(addr)
         .await?;
 

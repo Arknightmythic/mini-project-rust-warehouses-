@@ -218,6 +218,9 @@ services:
       WAREHOUSE_SERVICE_URL: http://warehouse-service:50052
       PRODUCT_SERVICE_URL: http://product-service:50053
       AMQP_URL: amqp://guest:guest@rabbitmq:5672/%2f
+      # Deliberately short so the compensation demo is watchable.
+      SWEEPER_INTERVAL_SECS: 10
+      RESERVATION_TIMEOUT_SECS: 30
     ports:
       - "50054:50054"
     depends_on:

@@ -6,7 +6,6 @@ use lapin::types::FieldTable;
 use lapin::{Channel, Connection, ConnectionProperties};
 use opentelemetry::global;
 use opentelemetry::propagation::Extractor;
-use serde::de::DeserializeOwned;
 use tracing::Instrument;
 use tracing_opentelemetry::OpenTelemetrySpanExt;
 
@@ -26,15 +25,14 @@ pub async fn connect(url: &str) -> anyhow::Result<(Connection, Channel)> {
     Ok((connection, channel))
 }
 
-pub async fn consume<T, F, Fut>(
+pub async fn consume<F, Fut>(
     channel: &Channel,
     queue: &str,
     consumer_tag: &str,
     handler: F,
 ) -> anyhow::Result<()>
 where
-    T: DeserializeOwned,
-    F: Fn(Envelope<T>) -> Fut,
+    F: Fn(Envelope<serde_json::Value>) -> Fut,
     Fut: Future<Output = anyhow::Result<()>>,
 {
     let mut consumer = channel
@@ -51,7 +49,7 @@ where
     while let Some(delivery) = consumer.next().await {
         let delivery = delivery?;
 
-        let envelope: Envelope<T> = match serde_json::from_slice(&delivery.data) {
+        let envelope: Envelope<serde_json::Value> = match serde_json::from_slice(&delivery.data) {
             Ok(value) => value,
             Err(err) => {
                 // A message we cannot even parse will never parse. Requeueing it

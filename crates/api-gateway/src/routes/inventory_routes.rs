@@ -8,7 +8,9 @@ use wms_proto::inventory::v1 as inventory_v1;
 
 use wms_proto::product::v1 as product_v1;
 
-use crate::dto::{ReceiptJson, StockBalanceJson, StockMovementJson, StockReportRowJson};
+use crate::dto::{
+    ReceiptJson, ShipmentJson, StockBalanceJson, StockMovementJson, StockReportRowJson,
+};
 use crate::middlewares::AuthUser;
 use crate::state::AppState;
 
@@ -19,6 +21,10 @@ pub fn router() -> Router<AppState> {
         .route("/balances/{warehouse_id}/{product_id}", get(get_balance))
         .route("/movements", get(list_movements))
         .route("/report", get(stock_report))
+        .route("/shipments", post(ship_stock))
+        .route("/shipments/{id}", get(get_shipment))
+        .route("/shipments/{id}/confirm", post(confirm_shipment))
+        .route("/shipments/{id}/cancel", post(cancel_shipment))
 }
 
 #[derive(Deserialize)]
@@ -201,4 +207,115 @@ async fn stock_report(
         .collect();
 
     Ok(Json(rows))
+}
+
+#[derive(Deserialize)]
+struct ShipStockBody {
+    warehouse_id: i64,
+    reference_no: Option<String>,
+    items: Vec<ShipmentItemBody>,
+    idempotency_key: String,
+}
+
+#[derive(Deserialize)]
+struct ShipmentItemBody {
+    product_id: i64,
+    quantity: i64,
+}
+
+#[derive(Deserialize)]
+struct CancelBody {
+    reason: Option<String>,
+}
+
+// Step 1: reserve. Returns RESERVED, not SHIPPED - nothing has left the warehouse.
+async fn ship_stock(
+    auth: AuthUser,
+    State(state): State<AppState>,
+    Json(body): Json<ShipStockBody>,
+) -> AppResult<Json<ShipmentJson>> {
+    let mut client = state.inventory.clone();
+
+    let mut request = Request::new(inventory_v1::ShipStockRequest {
+        warehouse_id: body.warehouse_id,
+        reference_no: body.reference_no,
+        items: body
+            .items
+            .into_iter()
+            .map(|item| inventory_v1::ShipmentItem {
+                product_id: item.product_id,
+                quantity: item.quantity,
+            })
+            .collect(),
+        idempotency_key: body.idempotency_key,
+    });
+    wms_core::grpc::identity_to_metadata(&auth, request.metadata_mut());
+
+    let shipment = client
+        .ship_stock(request)
+        .await
+        .map_err(AppError::from)?
+        .into_inner();
+
+    Ok(Json(shipment.into()))
+}
+
+// Step 2: commit.
+async fn confirm_shipment(
+    auth: AuthUser,
+    State(state): State<AppState>,
+    Path(id): Path<i64>,
+) -> AppResult<Json<ShipmentJson>> {
+    let mut client = state.inventory.clone();
+
+    let mut request = Request::new(inventory_v1::ConfirmShipmentRequest { shipment_id: id });
+    wms_core::grpc::identity_to_metadata(&auth, request.metadata_mut());
+
+    let shipment = client
+        .confirm_shipment(request)
+        .await
+        .map_err(AppError::from)?
+        .into_inner();
+
+    Ok(Json(shipment.into()))
+}
+
+// Step 3: compensate.
+async fn cancel_shipment(
+    auth: AuthUser,
+    State(state): State<AppState>,
+    Path(id): Path<i64>,
+    Json(body): Json<CancelBody>,
+) -> AppResult<Json<ShipmentJson>> {
+    let mut client = state.inventory.clone();
+
+    let mut request = Request::new(inventory_v1::CancelShipmentRequest {
+        shipment_id: id,
+        reason: body.reason,
+    });
+    wms_core::grpc::identity_to_metadata(&auth, request.metadata_mut());
+
+    let shipment = client
+        .cancel_shipment(request)
+        .await
+        .map_err(AppError::from)?
+        .into_inner();
+
+    Ok(Json(shipment.into()))
+}
+
+async fn get_shipment(
+    _auth: AuthUser,
+    State(state): State<AppState>,
+    Path(id): Path<i64>,
+) -> AppResult<Json<ShipmentJson>> {
+    let mut client = state.inventory.clone();
+
+    let shipment = client
+        .get_shipment(Request::new(inventory_v1::GetShipmentRequest { shipment_id: id }))
+        .await
+        .map_err(AppError::from)?
+        .into_inner();
+
+    Ok(Json(shipment.into()))
 }

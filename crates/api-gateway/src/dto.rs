@@ -244,3 +244,41 @@ impl From<inventory_v1::StockMovement> for StockMovementJson {
         }
     }
 }
+
+#[derive(Serialize)]
+pub struct ShipmentItemJson {
+    pub product_id: i64,
+    pub quantity: i64,
+}
+
+#[derive(Serialize)]
+pub struct ShipmentJson {
+    pub id: i64,
+    pub warehouse_id: i64,
+    pub reference_no: Option<String>,
+    pub status: String,
+    pub items: Vec<ShipmentItemJson>,
+    pub created_at: Option<DateTime<Utc>>,
+    pub updated_at: Option<DateTime<Utc>>,
+}
+
+impl From<inventory_v1::Shipment> for ShipmentJson {
+    fn from(shipment: inventory_v1::Shipment) -> Self {
+        Self {
+            id: shipment.id,
+            warehouse_id: shipment.warehouse_id,
+            reference_no: shipment.reference_no,
+            status: shipment.status,
+            items: shipment
+                .items
+                .into_iter()
+                .map(|item| ShipmentItemJson {
+                    product_id: item.product_id,
+                    quantity: item.quantity,
+                })
+                .collect(),
+            created_at: shipment.created_at.as_ref().and_then(wms_proto::from_timestamp),
+            updated_at: shipment.updated_at.as_ref().and_then(wms_proto::from_timestamp),
+        }
+    }
+}

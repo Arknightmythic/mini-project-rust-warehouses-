@@ -43,7 +43,7 @@ async fn main() -> anyhow::Result<()> {
         "notification-service",
         |envelope| {
             let handler = handler.clone();
-            async move { handler.handle_stock_received(envelope).await }
+            async move { handler.handle(envelope).await }
         },
     )
     .await?;

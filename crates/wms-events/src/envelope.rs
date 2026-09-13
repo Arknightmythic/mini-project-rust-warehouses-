@@ -18,6 +18,16 @@ pub struct Envelope<T> {
     pub payload: T,
 }
 
+impl Envelope<serde_json::Value> {
+    // Consumers receive the envelope with an untyped payload and decode only the
+    // event types they care about. With a wildcard binding a queue WILL receive
+    // types it has never heard of, and refusing to decode them would dead-letter
+    // perfectly valid messages.
+    pub fn payload_as<T: serde::de::DeserializeOwned>(&self) -> anyhow::Result<T> {
+        Ok(serde_json::from_value(self.payload.clone())?)
+    }
+}
+
 impl<T> Envelope<T> {
     pub fn new(event_type: &str, payload: T) -> Self {
         Self {
@@ -44,5 +54,32 @@ pub struct StockReceived {
     pub warehouse_id: i64,
     pub reference_no: Option<String>,
     pub received_by: i64,
+    pub lines: Vec<ReceivedLine>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StockReserved {
+    pub shipment_id: i64,
+    pub warehouse_id: i64,
+    pub reference_no: Option<String>,
+    pub reserved_by: i64,
+    pub lines: Vec<ReceivedLine>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StockShipped {
+    pub shipment_id: i64,
+    pub warehouse_id: i64,
+    pub reference_no: Option<String>,
+    pub lines: Vec<ReceivedLine>,
+}
+
+// The compensating event. Note it is not an "undo": it is another fact that
+// happened later, which is the only kind of reversal a distributed system has.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StockReservationReleased {
+    pub shipment_id: i64,
+    pub warehouse_id: i64,
+    pub reason: String,
     pub lines: Vec<ReceivedLine>,
 }

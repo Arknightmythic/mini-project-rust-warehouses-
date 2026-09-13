@@ -1528,6 +1528,7 @@ version = "0.2.0"
 dependencies = [
  "anyhow",
  "chrono",
+ "serde",
  "sqlx",
  "tokio",
  "tonic",
@@ -1912,6 +1913,7 @@ version = "0.2.0"
 dependencies = [
  "anyhow",
  "chrono",
+ "serde_json",
  "sqlx",
  "tokio",
  "tonic",
@@ -2269,6 +2271,7 @@ dependencies = [
  "anyhow",
  "chrono",
  "serde",
+ "serde_json",
  "sqlx",
  "tokio",
  "tonic",

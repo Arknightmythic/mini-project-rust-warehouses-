@@ -3,6 +3,8 @@ use tonic::Request;
 use wms_core::AppError;
 use wms_core::grpc::TracedChannel;
 use wms_events::{Envelope, StockReceived};
+
+const STOCK_RECEIVED: &str = "inventory.stock.received";
 use wms_proto::user::v1 as user_v1;
 use wms_proto::user::v1::user_service_client::UserServiceClient;
 
@@ -21,9 +23,21 @@ impl Handler {
         Self { pool, users }
     }
 
-    pub async fn handle_stock_received(
+    // The queue binds inventory.stock.# so it receives every stock event. Types
+    // this service does not care about are ACKED and ignored: dead-lettering a
+    // valid message just because we have no use for it would be wrong.
+    pub async fn handle(&self, envelope: Envelope<serde_json::Value>) -> anyhow::Result<()> {
+        if envelope.event_type != STOCK_RECEIVED {
+            tracing::debug!(event_type = %envelope.event_type, "event type not handled, skipping");
+            return Ok(());
+        }
+
+        self.handle_stock_received(envelope).await
+    }
+
+    async fn handle_stock_received(
         &self,
-        envelope: Envelope<StockReceived>,
+        envelope: Envelope<serde_json::Value>,
     ) -> anyhow::Result<()> {
         // Deduplicate first. The broker redelivers when an ack is lost, so this
         // handler will see the same event twice sooner or later.
@@ -32,7 +46,8 @@ impl Handler {
             return Ok(());
         }
 
-        let payload = &envelope.payload;
+        let payload: StockReceived = envelope.payload_as()?;
+        let payload = &payload;
 
         // A consumer is still a service: it makes synchronous calls of its own.
         // Being event-driven on the way in says nothing about the way out.
