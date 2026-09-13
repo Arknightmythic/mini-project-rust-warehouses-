@@ -1,0 +1,15 @@
+[package]
+name = "warehouse-service"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+wms-core = { workspace = true, features = ["grpc"] }
+wms-proto = { workspace = true }
+
+anyhow = { workspace = true }
+chrono = { workspace = true }
+sqlx = { workspace = true }
+tokio = { workspace = true }
+tonic = { workspace = true }
+tracing = { workspace = true }

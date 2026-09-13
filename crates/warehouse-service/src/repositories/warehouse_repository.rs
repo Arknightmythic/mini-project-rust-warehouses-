@@ -1,22 +1,23 @@
 use sqlx::PgPool;
+use wms_core::AppError;
 
 use crate::models::warehouse::Warehouse;
 
-pub async fn list(pool: &PgPool) -> Result<Vec<Warehouse>, sqlx::Error> {
-    sqlx::query_as::<_, Warehouse>(
+pub async fn list(pool: &PgPool) -> Result<Vec<Warehouse>, AppError> {
+    Ok(sqlx::query_as::<_, Warehouse>(
         "SELECT * FROM public.warehouses WHERE delete_at IS NULL ORDER BY id",
     )
     .fetch_all(pool)
-    .await
+    .await?)
 }
 
-pub async fn find_by_id(pool: &PgPool, id: i64) -> Result<Option<Warehouse>, sqlx::Error> {
-    sqlx::query_as::<_, Warehouse>(
+pub async fn find_by_id(pool: &PgPool, id: i64) -> Result<Option<Warehouse>, AppError> {
+    Ok(sqlx::query_as::<_, Warehouse>(
         "SELECT * FROM public.warehouses WHERE id = $1 AND delete_at IS NULL",
     )
     .bind(id)
     .fetch_optional(pool)
-    .await
+    .await?)
 }
 
 pub async fn create(
@@ -25,8 +26,8 @@ pub async fn create(
     address: &str,
     phone: Option<&str>,
     photo: Option<&str>,
-) -> Result<Warehouse, sqlx::Error> {
-    sqlx::query_as::<_, Warehouse>(
+) -> Result<Warehouse, AppError> {
+    Ok(sqlx::query_as::<_, Warehouse>(
         "INSERT INTO public.warehouses (name, address, phone, photo)
          VALUES ($1, $2, $3, $4)
          RETURNING *",
@@ -36,7 +37,7 @@ pub async fn create(
     .bind(phone)
     .bind(photo)
     .fetch_one(pool)
-    .await
+    .await?)
 }
 
 pub async fn update(
@@ -46,8 +47,8 @@ pub async fn update(
     address: Option<&str>,
     phone: Option<&str>,
     photo: Option<&str>,
-) -> Result<Option<Warehouse>, sqlx::Error> {
-    sqlx::query_as::<_, Warehouse>(
+) -> Result<Option<Warehouse>, AppError> {
+    Ok(sqlx::query_as::<_, Warehouse>(
         "UPDATE public.warehouses SET
             name = COALESCE($2, name),
             address = COALESCE($3, address),
@@ -63,10 +64,10 @@ pub async fn update(
     .bind(phone)
     .bind(photo)
     .fetch_optional(pool)
-    .await
+    .await?)
 }
 
-pub async fn soft_delete(pool: &PgPool, id: i64) -> Result<u64, sqlx::Error> {
+pub async fn soft_delete(pool: &PgPool, id: i64) -> Result<u64, AppError> {
     let result = sqlx::query(
         "UPDATE public.warehouses SET delete_at = CURRENT_TIMESTAMP
          WHERE id = $1 AND delete_at IS NULL",
@@ -74,5 +75,6 @@ pub async fn soft_delete(pool: &PgPool, id: i64) -> Result<u64, sqlx::Error> {
     .bind(id)
     .execute(pool)
     .await?;
+
     Ok(result.rows_affected())
 }

@@ -17,18 +17,18 @@ services:
       timeout: 5s
       retries: 10
 
-  # Temporary: still owns warehouses until Phase 3 moves them out.
-  postgres-legacy:
-    image: postgres:16-alpine
+  postgres-warehouse:
+    image: postgres:17-alpine
+    container_name: postgres-warehouse
     environment:
       POSTGRES_USER: postgres
-      POSTGRES_DB: warehouse-rust
-      POSTGRES_HOST_AUTH_METHOD: trust
+      POSTGRES_PASSWORD: lokal
+      POSTGRES_DB: warehouse_warehouse_db
     restart: unless-stopped
     ports:
-      - "5439:5432"
+      - "5437:5432"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - postgres_warehouse_data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 5s
@@ -58,6 +58,26 @@ services:
       timeout: 5s
       retries: 5
 
+  warehouse-service:
+    build:
+      context: .
+      args:
+        SERVICE: warehouse-service
+    environment:
+      GRPC_ADDR: 0.0.0.0:50052
+      DATABASE_URL: postgresql://postgres:lokal@postgres-warehouse:5432/warehouse_warehouse_db
+      DB_MAX_CONNECTIONS: 10
+    ports:
+      - "50052:50052"
+    depends_on:
+      postgres-warehouse:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c '</dev/tcp/127.0.0.1/50052'"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   api-gateway:
     build:
       context: .
@@ -67,6 +87,7 @@ services:
       SERVER_URL: 0.0.0.0
       SERVER_PORT: 8080
       USER_SERVICE_URL: http://user-service:50051
+      WAREHOUSE_SERVICE_URL: http://warehouse-service:50052
       JWT_SECRET: secret
       JWT_ISSUER: secret
     ports:
@@ -77,24 +98,8 @@ services:
     depends_on:
       user-service:
         condition: service_started
-
-  legacy-monolith:
-    build:
-      context: .
-      args:
-        SERVICE: legacy-monolith
-    environment:
-      SERVER_URL: 0.0.0.0
-      SERVER_PORT: 8081
-      DATABASE_URL: postgresql://postgres@postgres-legacy:5432/warehouse-rust
-      DB_MAX_CONNECTIONS: 10
-      JWT_SECRET: secret
-      JWT_ISSUER: secret
-    ports:
-      - "8081:8081"
-    depends_on:
-      postgres-legacy:
-        condition: service_healthy
+      warehouse-service:
+        condition: service_started
 
   user-seed:
     build:
@@ -111,4 +116,4 @@ services:
 
 volumes:
   postgres_user_data:
-  postgres_data:
+  postgres_warehouse_data:

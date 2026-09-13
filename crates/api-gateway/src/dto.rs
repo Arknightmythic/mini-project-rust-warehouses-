@@ -1,6 +1,7 @@
 use chrono::{DateTime, Utc};
 use serde::Serialize;
 use wms_proto::user::v1 as user_v1;
+use wms_proto::warehouse::v1 as warehouse_v1;
 
 // protobuf timestamps are seconds+nanos; chrono serde renders RFC3339, which is
 // what v1 emitted. Converting here keeps the public JSON byte-identical while the
@@ -53,4 +54,29 @@ impl From<user_v1::Role> for RoleJson {
 pub struct LoginJson {
     pub token: String,
     pub user: UserJson,
+}
+
+#[derive(Serialize)]
+pub struct WarehouseJson {
+    pub id: i64,
+    pub name: String,
+    pub address: String,
+    pub phone: Option<String>,
+    pub photo: Option<String>,
+    pub created_at: Option<DateTime<Utc>>,
+    pub updated_at: Option<DateTime<Utc>>,
+}
+
+impl From<warehouse_v1::Warehouse> for WarehouseJson {
+    fn from(warehouse: warehouse_v1::Warehouse) -> Self {
+        Self {
+            id: warehouse.id,
+            name: warehouse.name,
+            address: warehouse.address,
+            phone: warehouse.phone,
+            photo: warehouse.photo,
+            created_at: warehouse.created_at.as_ref().and_then(wms_proto::from_timestamp),
+            updated_at: warehouse.updated_at.as_ref().and_then(wms_proto::from_timestamp),
+        }
+    }
 }

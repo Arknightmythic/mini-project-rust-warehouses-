@@ -1,4 +1,10 @@
 * text=auto
+
+# Toolchain output (rustfmt, tonic codegen) is always LF. Pinning these stops the
+# working tree from looking dirty after every build on Windows.
+*.rs text eol=lf
+*.toml text eol=lf
 *.sh text eol=lf
 *.sql text eol=lf
+*.proto text eol=lf
 Dockerfile text eol=lf

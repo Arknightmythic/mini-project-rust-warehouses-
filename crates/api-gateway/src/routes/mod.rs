@@ -1,6 +1,7 @@
 pub mod auth_routes;
 pub mod role_routes;
 pub mod user_routes;
+pub mod warehouse_routes;
 
 use axum::routing::get;
 use axum::{Json, Router};
@@ -16,6 +17,7 @@ pub fn build_router(state: AppState) -> Router {
         .nest("/api/auth", auth_routes::router())
         .nest("/api/users", user_routes::router())
         .nest("/api/roles", role_routes::router())
+        .nest("/api/warehouses", warehouse_routes::router())
         .layer(CorsLayer::permissive())
         .layer(TraceLayer::new_for_http())
         .with_state(state)

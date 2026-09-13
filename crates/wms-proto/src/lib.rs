@@ -4,6 +4,12 @@ pub mod user {
     }
 }
 
+pub mod warehouse {
+    pub mod v1 {
+        include!("generated/wms.warehouse.v1.rs");
+    }
+}
+
 use chrono::{DateTime, Utc};
 use prost_types::Timestamp;
 

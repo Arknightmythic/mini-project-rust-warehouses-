@@ -1,0 +1,48 @@
+syntax = "proto3";
+
+package wms.warehouse.v1;
+
+import "google/protobuf/empty.proto";
+import "google/protobuf/timestamp.proto";
+
+// Note there is no delete_at field. Soft deletion is an internal storage detail;
+// consumers simply never see a deleted warehouse. The contract exposes intent,
+// not the table layout.
+message Warehouse {
+  int64 id = 1;
+  string name = 2;
+  string address = 3;
+  optional string phone = 4;
+  optional string photo = 5;
+  google.protobuf.Timestamp created_at = 6;
+  google.protobuf.Timestamp updated_at = 7;
+}
+
+message GetWarehouseRequest { int64 id = 1; }
+message ListWarehousesRequest {}
+message ListWarehousesResponse { repeated Warehouse warehouses = 1; }
+
+message CreateWarehouseRequest {
+  string name = 1;
+  string address = 2;
+  optional string phone = 3;
+  optional string photo = 4;
+}
+
+message UpdateWarehouseRequest {
+  int64 id = 1;
+  optional string name = 2;
+  optional string address = 3;
+  optional string phone = 4;
+  optional string photo = 5;
+}
+
+message DeleteWarehouseRequest { int64 id = 1; }
+
+service WarehouseService {
+  rpc GetWarehouse(GetWarehouseRequest) returns (Warehouse);
+  rpc ListWarehouses(ListWarehousesRequest) returns (ListWarehousesResponse);
+  rpc CreateWarehouse(CreateWarehouseRequest) returns (Warehouse);
+  rpc UpdateWarehouse(UpdateWarehouseRequest) returns (Warehouse);
+  rpc DeleteWarehouse(DeleteWarehouseRequest) returns (google.protobuf.Empty);
+}
